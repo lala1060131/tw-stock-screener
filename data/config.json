@@ -1,0 +1,23 @@
+{
+  "line_token": "",
+  "finmind_token": "",
+  "schedule_enabled": false,
+  "schedule_time": "18:00",
+  "schedule_days": [
+    "Mon",
+    "Tue",
+    "Wed",
+    "Thu",
+    "Fri"
+  ],
+  "max_workers": 6,
+  "stock_pool_size": 500,
+  "notify_min_gates": 2,
+  "filters": {
+    "drop_60d_min": 30,
+    "debt_ratio_max": 50,
+    "require_dividend": true,
+    "require_eps_positive": true
+  },
+  "last_run": null
+}

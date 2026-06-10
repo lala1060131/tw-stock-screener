@@ -1,0 +1,20 @@
+{
+  "name": "tw-stock-screener",
+  "version": "3.0.0",
+  "description": "台股低基期選股機器人 v3 — 科技/電子/半導體/電機類500支，三門篩選",
+  "main": "server.cjs",
+  "scripts": {
+    "start": "node server.cjs",
+    "dev": "node server.cjs",
+    "screen": "python3 python/screener.py",
+    "screen:quick": "python3 python/screener.py quick",
+    "backtest": "python3 python/screener.py backtest",
+    "list": "python3 python/screener.py list"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "license": "MIT"
+}

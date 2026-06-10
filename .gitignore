@@ -1,0 +1,21 @@
+# deps
+node_modules/
+__pycache__/
+*.pyc
+
+# data (keep config.json)
+data/screening_result.json
+data/backtest_result.json
+data/*.xlsx
+
+# logs
+logs/*.log
+
+# env
+.env
+.dev.vars
+
+# misc
+.DS_Store
+.vscode/
+.idea/

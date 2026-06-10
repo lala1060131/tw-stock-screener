@@ -1,0 +1,1643 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>台股低基期選股機器人 v3</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fortawesome/fontawesome-free@6.4.0/css/all.min.css"/>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios@1.6.0/dist/axios.min.js"></script>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@300;400;500;700&display=swap');
+*{box-sizing:border-box}
+body{font-family:'Noto Sans TC',sans-serif;background:#0f172a;color:#e2e8f0}
+.card{background:#1e293b;border:1px solid #334155;border-radius:1rem}
+.card-inner{background:#162032;border:1px solid #1e3a5f;border-radius:.75rem}
+.tab-pill{padding:.375rem 1rem;border-radius:9999px;font-size:.8rem;cursor:pointer;transition:all .2s;color:#94a3b8}
+.tab-pill.active{background:#3b82f6;color:#fff;font-weight:700}
+.shimmer{background:linear-gradient(90deg,#1e293b 25%,#263548 50%,#1e293b 75%);background-size:200% 100%;animation:shimmer 1.5s infinite}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.page{display:none}.page.active{display:block}
+.nav-item{display:flex;align-items:center;gap:.5rem;padding:.5rem .75rem;border-radius:.5rem;cursor:pointer;transition:all .2s;font-size:.85rem;color:#94a3b8;white-space:nowrap}
+.nav-item:hover{background:#1e293b;color:#e2e8f0}
+.nav-item.active{background:#1e3a5f;color:#60a5fa;font-weight:600}
+.badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:9999px;font-size:.7rem;font-weight:700}
+.progress-glow{box-shadow:0 0 10px #3b82f680}
+::-webkit-scrollbar{width:4px;height:4px}
+::-webkit-scrollbar-track{background:#0f172a}
+::-webkit-scrollbar-thumb{background:#334155;border-radius:2px}
+tr.data-row:hover{background:#162a3f!important;cursor:pointer}
+tr.detail-row:hover td{border-top:1px solid #3b82f640;border-bottom:1px solid #3b82f640}
+tr.detail-row:hover .w-9{box-shadow:0 0 0 2px #3b82f6;transform:scale(1.05);transition:all .15s}
+.input-dark{background:#0f172a;border:1px solid #334155;color:#e2e8f0;border-radius:.5rem;padding:.5rem .75rem;width:100%;font-size:.875rem;outline:none;transition:border .2s}
+.input-dark:focus{border-color:#3b82f6}
+.btn{display:inline-flex;align-items:center;gap:.375rem;padding:.5rem 1rem;border-radius:.75rem;font-size:.8rem;font-weight:700;cursor:pointer;transition:all .15s;border:none}
+.btn-primary{background:#3b82f6;color:#fff}.btn-primary:hover{background:#2563eb}
+.btn-green{background:#22c55e;color:#fff}.btn-green:hover{background:#16a34a}
+.btn-yellow{background:#f59e0b;color:#0f172a}.btn-yellow:hover{background:#d97706}
+.btn-red{background:#ef4444;color:#fff}.btn-red:hover{background:#dc2626}
+.btn-ghost{background:#1e293b;color:#94a3b8;border:1px solid #334155}.btn-ghost:hover{color:#e2e8f0;border-color:#475569}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.toggle{position:relative;display:inline-block;width:44px;height:24px}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;cursor:pointer;inset:0;background:#334155;border-radius:24px;transition:.3s}
+.slider:before{position:absolute;content:'';height:18px;width:18px;left:3px;bottom:3px;background:#fff;border-radius:50%;transition:.3s}
+input:checked + .slider{background:#3b82f6}
+input:checked + .slider:before{transform:translateX(20px)}
+.log-box{background:#0a1628;border:1px solid #1e3a5f;border-radius:.5rem;padding:.75rem;height:180px;overflow-y:auto;font-family:monospace;font-size:.75rem;color:#67e8f9}
+.sector-tag{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
+</style>
+</head>
+<body class="min-h-screen">
+
+<!-- ══ 頂部導覽 ══════════════════════════════════════════ -->
+<header class="sticky top-0 z-50 border-b border-slate-800" style="background:#0d1b2e">
+  <div class="max-w-screen-2xl mx-auto px-4 h-14 flex items-center justify-between">
+    <div class="flex items-center gap-3">
+      <div class="w-9 h-9 rounded-xl flex items-center justify-center text-xl" style="background:#1e3a5f">🤖</div>
+      <div>
+        <span class="font-bold text-white text-sm">台股低基期選股機器人</span>
+        <span class="text-slate-500 text-xs ml-2">v3.0</span>
+      </div>
+    </div>
+    <!-- 主選單 -->
+    <nav class="hidden md:flex items-center gap-1">
+      <div class="nav-item active" onclick="showPage('screening')" id="nav-screening">
+        <i class="fas fa-search-dollar"></i> 選股篩選
+      </div>
+      <div class="nav-item" onclick="showPage('backtest')" id="nav-backtest">
+        <i class="fas fa-history"></i> 歷史回測
+      </div>
+      <div class="nav-item" onclick="showPage('settings')" id="nav-settings">
+        <i class="fas fa-cog"></i> 設定
+      </div>
+      <div class="nav-item" onclick="showPage('guide')" id="nav-guide">
+        <i class="fas fa-book"></i> 使用說明
+      </div>
+    </nav>
+    <!-- 操作按鈕 -->
+    <div class="flex items-center gap-2">
+      <div class="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-full" style="background:#1e293b">
+        <div class="w-2 h-2 rounded-full" id="statusDot" style="background:#475569"></div>
+        <span id="statusTxt" class="text-slate-400">就緒</span>
+      </div>
+      <button class="btn btn-yellow" onclick="triggerScreening()" id="runBtn">
+        <i class="fas fa-play"></i> 執行篩選
+      </button>
+      <a href="/api/export/excel" class="btn btn-green">
+        <i class="fas fa-file-excel"></i><span class="hidden sm:inline">匯出</span>
+      </a>
+    </div>
+  </div>
+</header>
+
+<!-- ══ 主要內容 ══════════════════════════════════════════ -->
+<main class="max-w-screen-2xl mx-auto px-4 py-5">
+
+<!-- ▌頁面1：選股篩選 ─────────────────────────────────── -->
+<div id="page-screening" class="page active space-y-5">
+
+  <!-- 統計卡 -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style="background:#1e3a5f">📊</div>
+      <div><div class="text-2xl font-bold text-white" id="s-total">–</div><div class="text-xs text-slate-400">已篩選股票</div></div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style="background:#14532d">⭐</div>
+      <div><div class="text-2xl font-bold text-green-400" id="s-allpass">–</div><div class="text-xs text-slate-400">完全通過 3/3</div></div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style="background:#431407">👁</div>
+      <div><div class="text-2xl font-bold text-amber-400" id="s-two">–</div><div class="text-xs text-slate-400">觀察名單 2/3</div></div>
+    </div>
+    <div class="card p-4 flex items-center gap-3">
+      <div class="w-10 h-10 rounded-xl flex items-center justify-center shrink-0 text-lg" style="background:#2d1b69">🏆</div>
+      <div><div class="text-2xl font-bold text-purple-400" id="s-topscore">–</div><div class="text-xs text-slate-400">最高評分</div></div>
+    </div>
+  </div>
+
+  <!-- 三大門說明 -->
+  <div class="grid grid-cols-1 md:grid-cols-3 gap-3">
+    <div class="card p-4 border-l-4 border-blue-500">
+      <div class="flex items-center gap-2 mb-2"><span class="text-lg">🛡</span><span class="font-bold text-blue-300 text-sm">財務防護門</span></div>
+      <div class="text-xs text-slate-400 space-y-1">
+        <div class="flex justify-between"><span>連5年獲利 EPS&gt;0</span><span id="cfg-eps" class="text-blue-400 font-mono">啟用</span></div>
+        <div class="flex justify-between"><span>負債比</span><span id="cfg-debt" class="text-blue-400 font-mono">&lt;50%</span></div>
+        <div class="flex justify-between"><span>需有配息</span><span id="cfg-div" class="text-blue-400 font-mono">啟用</span></div>
+      </div>
+    </div>
+    <div class="card p-4 border-l-4 border-orange-500">
+      <div class="flex items-center gap-2 mb-2"><span class="text-lg">📉</span><span class="font-bold text-orange-300 text-sm">低基期門（錯殺偵測）</span></div>
+      <div class="text-xs text-slate-400 space-y-1">
+        <div class="flex justify-between"><span>60日跌幅門檻</span><span id="cfg-drop" class="text-orange-400 font-mono">&gt;30%</span></div>
+        <div class="flex justify-between"><span>偵測近期超跌股</span><span class="text-orange-400 font-mono">啟用</span></div>
+      </div>
+    </div>
+    <div class="card p-4 border-l-4 border-green-500">
+      <div class="flex items-center gap-2 mb-2"><span class="text-lg">🚀</span><span class="font-bold text-green-300 text-sm">轉機訊號門</span></div>
+      <div class="text-xs text-slate-400 space-y-1">
+        <div>站上季線 (MA60)</div>
+        <div>近月量能上升 或 營收成長</div>
+        <div>RSI、黃金交叉輔助分析</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 篩選進度 -->
+  <div id="progress-panel" class="hidden card p-5">
+    <div class="flex items-center gap-3 mb-3">
+      <div class="w-10 h-10 rounded-full flex items-center justify-center" style="background:#1e3a5f">
+        <i class="fas fa-cog text-blue-400 animate-spin"></i>
+      </div>
+      <div>
+        <div class="font-semibold text-white text-sm" id="prog-text">初始化...</div>
+        <div class="text-xs text-slate-400" id="prog-sub">連接資料源</div>
+      </div>
+      <button class="btn btn-ghost ml-auto text-xs" onclick="stopScreening()">
+        <i class="fas fa-stop"></i> 中止
+      </button>
+    </div>
+    <div class="bg-slate-900 rounded-full h-2 overflow-hidden">
+      <div id="prog-bar" class="h-2 rounded-full progress-glow transition-all duration-500" style="width:3%;background:linear-gradient(90deg,#3b82f6,#8b5cf6)"></div>
+    </div>
+    <div class="mt-2 text-xs text-slate-500 text-right" id="prog-pct">3%</div>
+    <!-- 即時 log -->
+    <div class="mt-3">
+      <div class="text-xs text-slate-500 mb-1">即時日誌</div>
+      <div class="log-box" id="screen-log"></div>
+    </div>
+  </div>
+
+  <!-- 主表格 -->
+  <div class="card overflow-hidden">
+    <div class="px-4 py-2 border-b border-slate-800 flex flex-wrap items-center gap-2">
+      <!-- tabs -->
+      <div class="flex gap-1">
+        <div class="tab-pill active" onclick="switchTab('all')" id="tab-all">全部有效</div>
+        <div class="tab-pill" onclick="switchTab('pass3')" id="tab-pass3">⭐ 完全通過</div>
+        <div class="tab-pill" onclick="switchTab('pass2')" id="tab-pass2">👁 觀察名單</div>
+        <div class="tab-pill" onclick="switchTab('revenue')" id="tab-revenue">📈 營收轉正</div>
+      </div>
+      <div class="flex-1"></div>
+      <!-- 排序快捷 -->
+      <select id="sortSelect" onchange="sortBySelect()" class="input-dark text-xs py-1 w-36">
+        <option value="score">綜合評分↓</option>
+        <option value="gates_passed">通過門數↓</option>
+        <option value="drop_60d_pct">60日跌幅↑</option>
+        <option value="above_60ma">站上MA60</option>
+        <option value="dividend_yield">殖利率↓</option>
+        <option value="volume_change_pct">量能變化↓</option>
+        <option value="rsi14">RSI14↑</option>
+      </select>
+      <input id="searchInput" oninput="renderTable()" placeholder="🔍 搜尋代碼/名稱"
+        class="input-dark text-xs py-1 w-40"/>
+    </div>
+
+    <!-- 骨架 -->
+    <div id="skel" class="p-4 space-y-2">
+      <div class="shimmer h-10 rounded-lg"></div>
+      <div class="shimmer h-10 rounded-lg opacity-80"></div>
+      <div class="shimmer h-10 rounded-lg opacity-60"></div>
+      <div class="shimmer h-10 rounded-lg opacity-40"></div>
+    </div>
+
+    <!-- 表格 -->
+    <div id="tbl-wrap" class="hidden overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead style="background:#0d1b2e">
+          <tr class="text-slate-500 uppercase text-xs">
+            <th class="px-3 py-3 text-left sticky left-0 z-10" style="background:#0d1b2e;min-width:130px">代碼 / 公司</th>
+            <th class="px-3 py-3 text-center">評分</th>
+            <th class="px-3 py-3 text-center">通過</th>
+            <th class="px-3 py-3 text-center whitespace-nowrap">60日跌幅</th>
+            <th class="px-3 py-3 text-center">MA60</th>
+            <th class="px-3 py-3 text-center">負債比</th>
+            <th class="px-3 py-3 text-center">殖利率</th>
+            <th class="px-3 py-3 text-center">RSI</th>
+            <th class="px-3 py-3 text-center">量能</th>
+            <th class="px-3 py-3 text-center whitespace-nowrap">營收YoY</th>
+            <th class="px-3 py-3 text-center">🛡財務</th>
+            <th class="px-3 py-3 text-center">📉低基</th>
+            <th class="px-3 py-3 text-center">🚀轉機</th>
+            <th class="px-3 py-3 text-right">股價</th>
+          </tr>
+        </thead>
+        <tbody id="tbody" class="divide-y" style="divide-color:#1e293b"></tbody>
+      </table>
+    </div>
+
+    <!-- 空狀態 -->
+    <div id="empty" class="hidden py-20 text-center">
+      <div class="text-5xl mb-3">🤖</div>
+      <p class="text-slate-400 text-sm">選股機器人等待啟動</p>
+      <p class="text-slate-500 text-xs mt-1 mb-4">點擊「執行篩選」開始分析台股</p>
+      <button onclick="triggerScreening()" class="btn btn-primary">
+        <i class="fas fa-play"></i> 立即執行篩選
+      </button>
+    </div>
+  </div>
+
+  <!-- 圖表 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4" id="charts-row">
+    <div class="card p-4">
+      <div class="text-xs text-slate-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-chart-pie text-blue-400"></i> 篩選結果分布</div>
+      <div style="height:180px;position:relative"><canvas id="gateChart"></canvas></div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-chart-bar text-green-400"></i> 產業分布（2門以上）</div>
+      <div style="height:180px;position:relative"><canvas id="sectorChart"></canvas></div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-400 font-bold mb-3 flex items-center gap-2"><i class="fas fa-chart-line text-purple-400"></i> 綜合評分分布</div>
+      <div style="height:180px;position:relative"><canvas id="scoreChart"></canvas></div>
+    </div>
+  </div>
+</div>
+
+<!-- ▌頁面2：歷史回測 ─────────────────────────────────── -->
+<div id="page-backtest" class="page space-y-5">
+
+  <!-- 控制 -->
+  <div class="card p-5">
+    <div class="flex flex-wrap items-center gap-4">
+      <div class="flex-1 min-w-48">
+        <div class="font-bold text-white text-sm mb-1">歷史回測分析</div>
+        <div class="text-xs text-slate-400">基於「MA60 穿越訊號」，分析歷史買入後持有 N 天的勝率與報酬</div>
+      </div>
+      <div class="flex items-center gap-3">
+        <div>
+          <div class="text-xs text-slate-500 mb-1">持有天數</div>
+          <select id="holdDays" class="input-dark text-sm py-1.5 w-24">
+            <option value="20">20天</option>
+            <option value="40">40天</option>
+            <option value="60" selected>60天</option>
+            <option value="90">90天</option>
+            <option value="120">120天</option>
+          </select>
+        </div>
+        <button class="btn btn-primary mt-4" onclick="triggerBacktest()" id="btBtn">
+          <i class="fas fa-play"></i> 開始回測
+        </button>
+        <button class="btn btn-ghost mt-4" onclick="stopBacktest()" id="btStopBtn">
+          <i class="fas fa-stop"></i> 中止
+        </button>
+      </div>
+    </div>
+
+    <!-- 回測進度 -->
+    <div id="bt-progress" class="hidden mt-4">
+      <div class="flex items-center gap-2 mb-2">
+        <i class="fas fa-cog text-blue-400 animate-spin text-sm"></i>
+        <span class="text-sm text-blue-300" id="bt-prog-txt">回測進行中...</span>
+      </div>
+      <div class="bg-slate-900 rounded-full h-1.5 overflow-hidden">
+        <div id="bt-prog-bar" class="h-1.5 rounded-full transition-all duration-500" style="width:5%;background:linear-gradient(90deg,#8b5cf6,#ec4899)"></div>
+      </div>
+      <div class="log-box mt-3" id="bt-log"></div>
+    </div>
+  </div>
+
+  <!-- 回測概覽卡 -->
+  <div class="grid grid-cols-2 lg:grid-cols-4 gap-3" id="bt-stats" style="display:none">
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-purple-400" id="bt-tested">–</div>
+      <div class="text-xs text-slate-400 mt-1">已回測股票</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-green-400" id="bt-winrate">–</div>
+      <div class="text-xs text-slate-400 mt-1">整體勝率</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-blue-400" id="bt-avgret">–</div>
+      <div class="text-xs text-slate-400 mt-1">平均報酬率</div>
+    </div>
+    <div class="card p-4 text-center">
+      <div class="text-2xl font-bold text-amber-400" id="bt-signals">–</div>
+      <div class="text-xs text-slate-400 mt-1">總訊號數</div>
+    </div>
+  </div>
+
+  <!-- 回測圖表 -->
+  <div class="grid grid-cols-1 md:grid-cols-2 gap-4" id="bt-charts" style="display:none">
+    <div class="card p-4">
+      <div class="text-xs text-slate-400 font-bold mb-3">各股勝率排行</div>
+      <div style="height:240px;position:relative"><canvas id="btWinChart"></canvas></div>
+    </div>
+    <div class="card p-4">
+      <div class="text-xs text-slate-400 font-bold mb-3">平均報酬分布</div>
+      <div style="height:240px;position:relative"><canvas id="btRetChart"></canvas></div>
+    </div>
+  </div>
+
+  <!-- 回測明細表 -->
+  <div class="card overflow-hidden" id="bt-table-wrap" style="display:none">
+    <div class="px-4 py-3 border-b border-slate-800 text-xs text-slate-400 font-bold">個股回測詳細結果</div>
+    <div class="overflow-x-auto">
+      <table class="w-full text-xs">
+        <thead style="background:#0d1b2e">
+          <tr class="text-slate-500 uppercase">
+            <th class="px-3 py-3 text-left">代碼</th>
+            <th class="px-3 py-3 text-center">訊號次數</th>
+            <th class="px-3 py-3 text-center">勝率</th>
+            <th class="px-3 py-3 text-center">平均報酬</th>
+            <th class="px-3 py-3 text-center">最大報酬</th>
+            <th class="px-3 py-3 text-center">最大虧損</th>
+            <th class="px-3 py-3 text-center">標準差</th>
+            <th class="px-3 py-3 text-center">最近訊號</th>
+          </tr>
+        </thead>
+        <tbody id="bt-tbody" class="divide-y" style="divide-color:#1e293b"></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- 空狀態 -->
+  <div id="bt-empty" class="card py-16 text-center">
+    <div class="text-5xl mb-3">📊</div>
+    <p class="text-slate-400 text-sm">尚未執行回測</p>
+    <p class="text-slate-500 text-xs mt-1">選擇持有天數後點擊「開始回測」</p>
+  </div>
+</div>
+
+<!-- ▌頁面3：設定 ────────────────────────────────────── -->
+<div id="page-settings" class="page space-y-5">
+
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-5">
+
+    <!-- LINE Notify -->
+    <div class="card p-5 space-y-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-green-400 text-xl">💬</span>
+        <span class="font-bold text-white">LINE Notify 設定</span>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">LINE Notify Token</label>
+        <div class="flex gap-2">
+          <input id="set-line-token" type="password" placeholder="貼上你的 LINE Notify Token" class="input-dark flex-1"/>
+          <button class="btn btn-ghost" onclick="toggleTokenVisible('set-line-token')"><i class="fas fa-eye text-xs"></i></button>
+        </div>
+        <div class="text-xs text-slate-500 mt-1">
+          取得方式：<a href="https://notify-bot.line.me/zh_TW/" target="_blank" class="text-blue-400 underline">notify-bot.line.me</a> → 登入 → 發行 Token
+        </div>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">最少通過幾門才推播</label>
+        <select id="set-notify-gates" class="input-dark w-32">
+          <option value="1">1門以上</option>
+          <option value="2" selected>2門以上</option>
+          <option value="3">僅完全通過</option>
+        </select>
+      </div>
+      <div class="flex gap-2">
+        <button class="btn btn-green" onclick="saveSettings()"><i class="fas fa-save"></i> 儲存設定</button>
+        <button class="btn btn-ghost" onclick="testLine()"><i class="fas fa-paper-plane"></i> 發送測試</button>
+        <button class="btn btn-ghost" onclick="manualSend()"><i class="fas fa-bell"></i> 立即推播</button>
+      </div>
+      <div id="line-status" class="hidden text-xs rounded-lg p-2"></div>
+    </div>
+
+    <!-- FinMind -->
+    <div class="card p-5 space-y-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-blue-400 text-xl">📈</span>
+        <span class="font-bold text-white">FinMind API（月營收）</span>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">FinMind Token（可選）</label>
+        <div class="flex gap-2">
+          <input id="set-finmind-token" type="password" placeholder="提升 API 請求限額（可不填）" class="input-dark flex-1"/>
+          <button class="btn btn-ghost" onclick="toggleTokenVisible('set-finmind-token')"><i class="fas fa-eye text-xs"></i></button>
+        </div>
+        <div class="text-xs text-slate-500 mt-1">
+          不填使用免費額度（每日有限制）。<a href="https://finmindtrade.com/" target="_blank" class="text-blue-400 underline">FinMind 官網</a>
+        </div>
+      </div>
+      <div>
+        <div class="text-xs text-slate-400 mb-2">篩選門條件</div>
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="text-xs text-slate-500">60日跌幅門檻(%)</label>
+            <input id="set-drop-min" type="number" step="5" class="input-dark mt-1 text-sm" placeholder="30"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500">股票池大小</label>
+            <input id="set-pool" type="number" class="input-dark mt-1 text-sm" placeholder="500"/>
+          </div>
+          <div>
+            <label class="text-xs text-slate-500">負債比上限(%)</label>
+            <input id="set-debt-max" type="number" class="input-dark mt-1 text-sm" placeholder="50"/>
+          </div>
+        </div>
+      </div>
+      <div class="flex items-center gap-4">
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">需要配息</label>
+          <label class="toggle"><input type="checkbox" id="set-req-div" checked><span class="slider"></span></label>
+        </div>
+        <div>
+          <label class="text-xs text-slate-500 block mb-1">需要EPS正</label>
+          <label class="toggle"><input type="checkbox" id="set-req-eps" checked><span class="slider"></span></label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 排程設定 -->
+    <div class="card p-5 space-y-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-purple-400 text-xl">⏰</span>
+        <span class="font-bold text-white">自動排程設定</span>
+      </div>
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-sm text-white">啟用自動篩選</div>
+          <div class="text-xs text-slate-500">每日盤後自動執行篩選＋LINE推播</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="set-sched-enabled" onchange="saveSettings()"><span class="slider"></span></label>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">執行時間</label>
+        <input id="set-sched-time" type="time" value="18:00" class="input-dark w-32"/>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-2">執行日</label>
+        <div class="flex flex-wrap gap-2" id="sched-days">
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Mon" class="day-cb" checked> 週一
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Tue" class="day-cb" checked> 週二
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Wed" class="day-cb" checked> 週三
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Thu" class="day-cb" checked> 週四
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Fri" class="day-cb" checked> 週五
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer">
+            <input type="checkbox" value="Sat" class="day-cb"> 週六
+          </label>
+        </div>
+      </div>
+      <div id="sched-status" class="text-xs text-slate-500"></div>
+      <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> 儲存設定</button>
+    </div>
+
+    <!-- 執行設定 -->
+    <div class="card p-5 space-y-4">
+      <div class="flex items-center gap-2 mb-1">
+        <span class="text-yellow-400 text-xl">⚙️</span>
+        <span class="font-bold text-white">執行參數</span>
+      </div>
+      <div>
+        <label class="text-xs text-slate-400 block mb-1">平行執行緒數</label>
+        <input id="set-workers" type="number" min="1" max="12" class="input-dark w-24 text-sm" placeholder="6"/>
+        <div class="text-xs text-slate-500 mt-1">建議 4~8，越多越快但會消耗較多CPU</div>
+      </div>
+      <button class="btn btn-primary" onclick="saveSettings()"><i class="fas fa-save"></i> 儲存</button>
+
+      <!-- 上次執行 -->
+      <div class="card-inner p-3 mt-2">
+        <div class="text-xs text-slate-500 mb-2">系統狀態</div>
+        <div class="space-y-1.5 text-xs">
+          <div class="flex justify-between"><span class="text-slate-400">上次執行</span><span class="text-white" id="last-run-time">–</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">排程狀態</span><span id="sched-badge" class="badge">未啟用</span></div>
+          <div class="flex justify-between"><span class="text-slate-400">資料版本</span><span class="text-white" id="data-version">–</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ▌頁面4：使用說明 ─────────────────────────────────── -->
+<div id="page-guide" class="page space-y-4 max-w-3xl">
+  <div class="card p-6">
+    <h2 class="text-xl font-bold text-white mb-4">📖 使用說明</h2>
+    <div class="space-y-5 text-sm text-slate-300">
+
+      <div>
+        <h3 class="text-base font-bold text-blue-300 mb-2">🤖 這個工具做什麼？</h3>
+        <p class="leading-relaxed text-slate-400">自動從台股中篩選「低基期獲利股」——即財務健全、股價處於歷史低水位、且開始出現轉機訊號的股票。原理是利用三道篩選門層層過濾，找出最接近理想「低買」條件的標的。</p>
+      </div>
+
+      <div>
+        <h3 class="text-base font-bold text-blue-300 mb-2">🛡 三大篩選門詳解</h3>
+        <div class="space-y-3">
+          <div class="card-inner p-3">
+            <div class="font-bold text-blue-400 mb-1">第一門：財務防護門</div>
+            <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li><b>連5年EPS > 0</b>：確保公司持續賺錢，不是靠業外美化財報</li>
+              <li><b>負債比 &lt; 50%</b>：過濾財務槓桿過高、可能撐不到景氣回溫的公司</li>
+              <li><b>有發放股利</b>：等待期間能「領息等價差」，降低持有心理成本</li>
+            </ul>
+          </div>
+          <div class="card-inner p-3">
+            <div class="font-bold text-orange-400 mb-1">第二門：低基期辨識門</div>
+            <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li><b>PB &lt; 1.2</b>：股價接近公司帳面淨值，下檔風險有限</li>
+              <li><b>10年位階 &lt; 20%</b>：公式 = (當前 - 10年低點) / (10年高點 - 低點)，數值越小代表股價越接近歷史低點</li>
+            </ul>
+          </div>
+          <div class="card-inner p-3">
+            <div class="font-bold text-green-400 mb-1">第三門：轉機訊號門</div>
+            <ul class="text-xs text-slate-400 space-y-1 list-disc list-inside">
+              <li><b>站上季線（MA60）</b>：低迷後突破60日均線，代表中長期趨勢開始轉強</li>
+              <li><b>量能上升</b>：近30天成交量 > 前30天，資金開始關注</li>
+              <li><b>RSI 分析</b>：RSI 30~50 為超跌回升的黃金區間</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <h3 class="text-base font-bold text-blue-300 mb-2">📈 月營收 YoY</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">透過 FinMind API 取得台股月營收數據，計算年增率（YoY）。<b>由負轉正</b>是最強的轉機訊號之一——代表基本面開始改善。建議優先關注「通過2門＋營收由負轉正」的標的。</p>
+      </div>
+
+      <div>
+        <h3 class="text-base font-bold text-blue-300 mb-2">📊 回測功能</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">針對每支股票，找出過去5年內所有「MA60穿越買入訊號」，計算持有N天後的報酬率與勝率。建議選擇勝率 &gt; 60%、平均報酬 &gt; 5% 的標的。</p>
+      </div>
+
+      <div>
+        <h3 class="text-base font-bold text-blue-300 mb-2">💬 LINE 推播</h3>
+        <p class="text-slate-400 text-xs leading-relaxed">需申請 LINE Notify Token。設定後，每次篩選完成自動推播結果到你的 LINE。也可在「設定」頁手動觸發推播。</p>
+      </div>
+
+      <div class="card-inner p-3 border-amber-800" style="border-color:#92400e">
+        <div class="font-bold text-amber-400 mb-1">⚠️ 免責聲明</div>
+        <p class="text-xs text-amber-200/70">本工具僅供學習與研究用途，所有篩選結果基於歷史數據自動計算，<b>不構成任何投資建議</b>。投資涉及風險，請投資人自行評估並承擔風險。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+</main>
+
+<!-- ══ 股票詳情 Modal ═══════════════════════════════════ -->
+<div id="modal" onclick="if(event.target===this)closeModal()"
+  class="fixed inset-0 z-50 items-center justify-center p-4"
+  style="display:none;background:rgba(0,0,0,.75);backdrop-filter:blur(4px)">
+  <div class="w-full max-w-xl max-h-[90vh] overflow-y-auto rounded-2xl" style="background:#1e293b;border:1px solid #334155">
+    <div id="modal-body" class="p-5"></div>
+  </div>
+</div>
+
+<!-- ══ JS ═════════════════════════════════════════════ -->
+<script>
+// ╔══════════════════════════════════════════════════════╗
+// ║  台股中文名稱對照表（前端快查）                         ║
+// ╚══════════════════════════════════════════════════════╝
+const TW_ZH_MAP = {
+  "2330": ["台積電","半導體","晶圓代工"],
+  "2303": ["聯電","半導體","晶圓代工"],
+  "2454": ["聯發科","半導體","IC設計"],
+  "2379": ["瑞昱","半導體","IC設計"],
+  "2337": ["旺宏","半導體","記憶體"],
+  "3711": ["日月光投控","半導體","封測"],
+  "2344": ["華邦電","半導體","記憶體"],
+  "2408": ["南亞科","半導體","記憶體"],
+  "3034": ["聯詠","半導體","IC設計"],
+  "2449": ["京元電子","半導體","封測"],
+  "2385": ["群光電能","半導體","IC設計"],
+  "3529": ["力旺","半導體","IP設計"],
+  "6743": ["安普科","半導體","IC設計"],
+  "2367": ["燿華電","半導體","PCB"],
+  "2388": ["威盛","半導體","IC設計"],
+  "6269": ["台郡","半導體","軟板"],
+  "3661": ["世芯-KY","半導體","IC設計"],
+  "3706": ["神盾","半導體","IC設計"],
+  "3443": ["創意","半導體","IC設計"],
+  "2376": ["技嘉","電腦","主機板"],
+  "2317": ["鴻海","電子製造","EMS"],
+  "2354": ["鴻準","電子製造","機殼"],
+  "2382": ["廣達","電子製造","NB代工"],
+  "2357": ["華碩","電子製造","品牌"],
+  "2353": ["宏碁","電子製造","品牌"],
+  "4938": ["和碩","電子製造","EMS"],
+  "2324": ["仁寶","電子製造","NB代工"],
+  "2356": ["英業達","電子製造","EMS"],
+  "3231": ["緯創","電子製造","EMS"],
+  "2327": ["國巨","電子製造","被動元件"],
+  "2301": ["光寶科","電子製造","光電"],
+  "2308": ["台達電","電子製造","電源"],
+  "2312": ["金寶","電子製造","EMS"],
+  "2316": ["楠梓電","電子製造","PCB"],
+  "2362": ["藍天","電子製造","EMS"],
+  "2365": ["昆盈","電子製造","周邊"],
+  "2373": ["震旦行","電腦","通路"],
+  "2374": ["佳能","電腦","通路"],
+  "3481": ["群創","面板","TFT-LCD"],
+  "2302": ["麗正","電子製造","連接器"],
+  "3006": ["晶豪科","半導體","記憶體IC"],
+  "2475": ["華映","面板","TFT-LCD"],
+  "2412": ["中華電","電信","固網/行動"],
+  "3045": ["台灣大","電信","行動"],
+  "4904": ["遠傳","電信","行動"],
+  "2498": ["宏達電","電信","手機"],
+  "3552": ["同泰","電子製造","PCB"],
+  "4977": ["眾達-KY","電子製造","連接器"],
+  "6547": ["高端疫苗","生技醫療","疫苗"],
+  "3044": ["健鼎","電子製造","PCB"],
+  "2891": ["中信金","金融","金控"],
+  "2882": ["國泰金","金融","金控"],
+  "2886": ["兆豐金","金融","金控"],
+  "2884": ["玉山金","金融","金控"],
+  "2892": ["第一金","金融","金控"],
+  "2885": ["元大金","金融","金控"],
+  "2881": ["富邦金","金融","金控"],
+  "2887": ["台新金","金融","金控"],
+  "2880": ["華南金","金融","金控"],
+  "2883": ["開發金","金融","金控"],
+  "2890": ["永豐金","金融","金控"],
+  "2889": ["國票金","金融","金控"],
+  "2878": ["日盛金","金融","金控"],
+  "5880": ["合庫金","金融","金控"],
+  "6005": ["群益證","金融","證券"],
+  "2801": ["彰銀","金融","銀行"],
+  "2809": ["京城銀","金融","銀行"],
+  "5876": ["上海商銀","金融","銀行"],
+  "2812": ["台中銀","金融","銀行"],
+  "2820": ["華票","金融","票券"],
+  "2002": ["中鋼","鋼鐵","鋼鐵"],
+  "2006": ["東和鋼鐵","鋼鐵","鋼鐵"],
+  "2008": ["高興昌","鋼鐵","鋼鐵"],
+  "2010": ["春源鋼鐵","鋼鐵","鋼鐵"],
+  "2014": ["中鴻","鋼鐵","鋼鐵"],
+  "9910": ["豐泰","橡膠","鞋業"],
+  "2015": ["豐興","鋼鐵","鋼鐵"],
+  "2017": ["官田鋼","鋼鐵","鋼鐵"],
+  "2022": ["聚亨","鋼鐵","金屬"],
+  "2023": ["燁輝","鋼鐵","鋼鐵"],
+  "1301": ["台塑","石化","塑膠"],
+  "1303": ["南亞","石化","塑膠"],
+  "1326": ["台化","石化","化纖"],
+  "1304": ["台聚","石化","塑膠"],
+  "1305": ["華夏","石化","塑膠"],
+  "6505": ["台塑化","石化","煉油"],
+  "1310": ["台苯","石化","苯"],
+  "1312": ["國喬","石化","塑膠"],
+  "1313": ["聯成","石化","可塑劑"],
+  "1314": ["中石化","石化","石化"],
+  "1101": ["台泥","水泥","水泥"],
+  "1102": ["亞泥","水泥","水泥"],
+  "1108": ["幸福","水泥","水泥"],
+  "2515": ["中工","建設","營建"],
+  "5522": ["遠雄","建設","建設"],
+  "2542": ["興富發","建設","建設"],
+  "2543": ["皇昌","建設","營建"],
+  "2545": ["皇翔","建設","建設"],
+  "2547": ["日勝生","建設","建設"],
+  "5533": ["三揚","建設","建設"],
+  "1216": ["統一","食品","食品"],
+  "1210": ["大成長城","食品","飼料"],
+  "1203": ["味王","食品","食品"],
+  "1702": ["南僑","食品","油脂"],
+  "1712": ["興農","食品","農藥"],
+  "2105": ["正新","橡膠","輪胎"],
+  "1201": ["味全","食品","食品"],
+  "1213": ["大飲","食品","飲料"],
+  "1215": ["卜蜂","食品","食品"],
+  "1217": ["愛之味","食品","食品"],
+  "1402": ["遠東新","紡織","紡織"],
+  "1434": ["福懋","紡織","紡織"],
+  "1439": ["中和羊毛","紡織","紡織"],
+  "1441": ["大東","紡織","紡織"],
+  "1444": ["力麗","紡織","紡織"],
+  "1409": ["新纖","紡織","化纖"],
+  "1414": ["東和","紡織","紡織"],
+  "1416": ["廣豐","紡織","紡織"],
+  "1417": ["嘉裕","紡織","成衣"],
+  "1418": ["東華","紡織","紡織"],
+  "2207": ["和泰車","汽車","汽車"],
+  "2201": ["裕隆","汽車","汽車"],
+  "9914": ["美利達","自行車","自行車"],
+  "9921": ["巨大","自行車","自行車"],
+  "2204": ["中華","汽車","商用車"],
+  "2206": ["三陽工業","汽車","機車"],
+  "2210": ["眾泰","汽車","汽車"],
+  "2227": ["裕日車","汽車","汽車"],
+  "9917": ["中聯資源","汽車","零件"],
+  "2603": ["長榮","航運","貨櫃航運"],
+  "2609": ["陽明","航運","貨櫃航運"],
+  "2615": ["萬海","航運","貨櫃航運"],
+  "2610": ["華航","航空","航空"],
+  "2618": ["長榮航","航空","航空"],
+  "2605": ["新興","航運","散裝航運"],
+  "2606": ["裕民","航運","散裝航運"],
+  "2608": ["大榮","航運","陸運"],
+  "2612": ["中航","航運","航運"],
+  "2613": ["中傳","航運","電視購物"],
+  "1503": ["士林電機","電機","電機"],
+  "1504": ["東元","電機","電機"],
+  "1507": ["永大","電機","電梯"],
+  "2504": ["國產","建設","建設"],
+  "1605": ["華新","電線","電線電纜"],
+  "1609": ["大亞","電線","電線電纜"],
+  "1533": ["益航","電機","機械"],
+  "1536": ["和大","電機","汽車傳動"],
+  "1537": ["廣隆","電機","紙品"],
+  "1538": ["正峰新","電機","機械"],
+  "4167": ["松瑞藥","生技醫療","藥品"],
+  "4168": ["醣聯","生技醫療","生技"],
+  "1786": ["科妍","生技醫療","醫美"],
+  "4144": ["美德醫療","生技醫療","醫療器材"],
+  "4720": ["友華","生技醫療","藥品"],
+  "6669": ["緯穎","電子製造","伺服器"],
+  "4126": ["太醫","生技醫療","醫療器材"],
+  "4147": ["中裕","生技醫療","生技"],
+  "4157": ["太景*","生技醫療","生技"],
+  "4160": ["創源","生技醫療","生技"],
+  "2912": ["統一超","零售","超商"],
+  "5903": ["全家","零售","超商"],
+  "9933": ["中鼎","工程","工程"],
+  "2723": ["美食達人","餐飲","餐飲"],
+  "2729": ["瓦城","餐飲","餐飲"],
+  "2903": ["遠百","零售","百貨"],
+  "2904": ["匯僑","零售","零售"],
+  "5905": ["大魯閣","零售","百貨"],
+  "9930": ["中聯資源","零售","零售"],
+  "9938": ["百和","紡織","束帶"],
+  "3673": ["TPK宸鴻","電子製造","觸控面板"],
+  "2395": ["研華","電腦","工業電腦"],
+  "6277": ["宏正","電腦","KVM"],
+  "3008": ["大立光","光學","鏡頭"],
+  "2458": ["義隆","半導體","IC設計"],
+  "2345": ["智邦","網通","交換器"],
+  "3017": ["奇鋐","散熱","散熱"],
+  "3019": ["亞光","光學","光學"],
+  "3022": ["威達電","網通","網路"],
+  "2360": ["致茂","電子製造","量測"],
+  "2363": ["矽統","半導體","IC設計"],
+  "2368": ["金像電","電子製造","PCB"],
+  "2369": ["菱生","半導體","封測"],
+  "2371": ["大同","電機","家電"],
+  "2372": ["中強光電","光學","背光"],
+  "2399": ["映泰","電腦","主機板"],
+  "2404": ["漢唐","工程","工程"],
+  "2409": ["友達","面板","TFT-LCD"],
+  "2496": ["卓越","電子製造","連接器"],
+  "0050": ["台灣50","ETF","寬基ETF"],
+  "0056": ["高股息","ETF","股息ETF"],
+  "00878": ["國泰永續高股息","ETF","ESG ETF"],
+  "00713": ["元大台灣高息低波","ETF","股息ETF"],
+  "1447": ["力鵬","紡織","化纖"],
+  "1449": ["佳和","紡織","紡織"],
+  "1530": ["亞聚","石化","塑膠"],
+  "1608": ["華榮","電線","電線電纜"],
+  "1611": ["中電","電線","電線電纜"],
+  "1612": ["宏泰電工","電線","電線電纜"],
+  "1614": ["三洋電","電機","家電"],
+  "1615": ["大山","電線","電線電纜"],
+  "1616": ["億泰","電線","電線電纜"],
+  "1617": ["榮星","電線","電線電纜"],
+  "2501": ["國建","建設","建設"],
+  "2505": ["國揚","建設","建設"],
+  "2506": ["太設","建設","建設"],
+  "2511": ["太子","建設","建設"]
+};
+function zhName(sym)   { const z=TW_ZH_MAP[sym]; return z?z[0]:""; }
+function zhSector(sym) { const z=TW_ZH_MAP[sym]; return z?z[1]:""; }
+function zhSub(sym)    { const z=TW_ZH_MAP[sym]; return z?z[2]:""; }
+/** 取得最佳顯示名稱（優先中文，次選API傳回英文，最後代碼） */
+function displayName(r) {
+  return r.display_name || r.name_zh || zhName(r.symbol) || r.name || r.symbol;
+}
+/** 取得子產業顯示（優先後端資料，次選前端對照） */
+function displaySub(r) {
+  return r.subsector_zh || zhSub(r.symbol) || r.sector_zh || zhSector(r.symbol) || "";
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  全域狀態                                             ║
+// ╚══════════════════════════════════════════════════════╝
+let allData    = [];
+let btData     = [];
+let currentTab = 'all';
+let sortField  = 'score';
+let sortAsc    = false;
+let charts     = {};
+let pollTimer  = null;
+let btPollTimer= null;
+let logTimer   = null;
+let btLogTimer = null;
+
+const ax = axios.create({ timeout: 30000 });
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  頁面切換                                             ║
+// ╚══════════════════════════════════════════════════════╝
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  document.getElementById('page-' + name).classList.add('active');
+  document.getElementById('nav-' + name).classList.add('active');
+  if (name === 'settings') loadSettings();
+  if (name === 'backtest' && btData.length) renderBacktest();
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  初始化                                               ║
+// ╚══════════════════════════════════════════════════════╝
+async function init() {
+  await checkStatus();
+  await loadResults();
+  if (document.getElementById('page-backtest').classList.contains('active') ||
+      !document.getElementById('page-screening').classList.contains('active')) {
+    await loadBacktest();
+  }
+}
+
+async function checkStatus() {
+  try {
+    const { data } = await ax.get('/api/status');
+    setStatusDot(data.screening ? 'yellow' : data.dataExists ? 'green' : 'gray',
+                 data.screening ? '篩選進行中' : data.dataExists ? '資料就緒' : '等待篩選');
+    if (data.lastRun) {
+      document.getElementById('last-run-time').textContent =
+        new Date(data.lastRun).toLocaleString('zh-TW');
+    }
+    return data;
+  } catch { return {}; }
+}
+
+function setStatusDot(color, text) {
+  const colors = { green:'#22c55e', yellow:'#f59e0b', gray:'#475569', red:'#ef4444' };
+  document.getElementById('statusDot').style.background = colors[color] || colors.gray;
+  document.getElementById('statusTxt').textContent = text;
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  載入篩選結果                                         ║
+// ╚══════════════════════════════════════════════════════╝
+async function loadResults() {
+  try {
+    const { data } = await ax.get('/api/results');
+    if (data.status === 'no_data') {
+      document.getElementById('skel').classList.add('hidden');
+      document.getElementById('empty').classList.remove('hidden');
+      return;
+    }
+    allData = (data.results || []).filter(r => !r.error);
+    updateStats(data);
+    renderTable();
+    renderCharts(data);
+    updateConfigBadges();
+    document.getElementById('skel').classList.add('hidden');
+    document.getElementById('tbl-wrap').classList.remove('hidden');
+    document.getElementById('empty').classList.add('hidden');
+  } catch {
+    document.getElementById('skel').classList.add('hidden');
+    document.getElementById('empty').classList.remove('hidden');
+  }
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  統計卡                                               ║
+// ╚══════════════════════════════════════════════════════╝
+function updateStats(data) {
+  document.getElementById('s-total').textContent   = data.total_screened || 0;
+  document.getElementById('s-allpass').textContent = data.all_pass_count || 0;
+  document.getElementById('s-two').textContent     = data.two_gates_count || 0;
+  const scores = allData.map(r => r.score || 0).filter(Boolean);
+  document.getElementById('s-topscore').textContent = scores.length ? Math.max(...scores) : '–';
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  表格渲染                                             ║
+// ╚══════════════════════════════════════════════════════╝
+function getTabData() {
+  let d = [...allData];
+  if (currentTab === 'pass3')   d = d.filter(r => r.gates_passed === 3);
+  else if (currentTab === 'pass2') d = d.filter(r => r.gates_passed === 2);
+  else if (currentTab === 'revenue') d = d.filter(r => r.revenue_yoy > 0 || r.revenue_turning);
+  else d = d.filter(r => r.gates_passed > 0);
+
+  const q = (document.getElementById('searchInput').value || '').toLowerCase().trim();
+  if (q) d = d.filter(r =>
+    (r.symbol||'').toLowerCase().includes(q) ||
+    (r.name||'').toLowerCase().includes(q) ||
+    (r.sector||'').toLowerCase().includes(q));
+
+  d.sort((a, b) => {
+    let av = a[sortField], bv = b[sortField];
+    if (av == null) av = sortAsc ? 1e18 : -1e18;
+    if (bv == null) bv = sortAsc ? 1e18 : -1e18;
+    if (typeof av === 'boolean') { av = av?1:0; bv = bv?1:0; }
+    return sortAsc ? av - bv : bv - av;
+  });
+  return d;
+}
+
+function renderTable() {
+  const data  = getTabData();
+  const tbody = document.getElementById('tbody');
+  tbody.innerHTML = '';
+
+  if (!data.length) {
+    tbody.innerHTML = `<tr><td colspan="14" class="py-10 text-center text-slate-500">此分類暫無結果</td></tr>`;
+    return;
+  }
+
+  const fn  = (v, d=2, s='') => v != null ? (+v).toFixed(d)+s : '–';
+  const b2  = v => v ? '<span class="text-green-400">✅</span>' : '<span class="text-red-500">❌</span>';
+  const gateC = n => n===3?'bg-green-900 text-green-300':n===2?'bg-amber-900 text-amber-300':'bg-slate-800 text-slate-400';
+
+  data.forEach((r, i) => {
+    const drop = r.drop_60d_pct;
+    const dropColor = drop!=null?(drop<=-30?'#22c55e':drop<=-20?'#60a5fa':drop<0?'#f59e0b':'#94a3b8'):'#94a3b8';
+    const dropHtml = drop!=null
+      ? `<span class="font-mono text-xs" style="color:${dropColor}">${drop>0?'+':''}${drop.toFixed(1)}%</span>`
+      : '<span class="text-slate-600">–</span>';
+    const ma60Html = r.above_60ma
+      ? '<span class="text-green-400">✔ 站上</span>'
+      : '<span class="text-red-400">✖ 下方</span>';
+
+    const vol = r.volume_change_pct;
+    const volHtml = vol!=null
+      ? `<span class="${vol>=0?'text-green-400':'text-red-400'}">${vol>=0?'▲':'▼'}${Math.abs(vol).toFixed(1)}%</span>`
+      : '<span class="text-slate-600">–</span>';
+
+    const rev = r.revenue_yoy;
+    const revHtml = rev!=null
+      ? `<span class="${rev>=0?'text-green-400':'text-red-400'}">${rev>=0?'+':''}${rev.toFixed(1)}%${r.revenue_turning?'<span class="text-yellow-400 ml-1" title="由負轉正">🔥</span>':''}</span>`
+      : '<span class="text-slate-600">–</span>';
+
+    const rsi = r.rsi14;
+    const rsiColor = !rsi?'#94a3b8':rsi<30?'#22c55e':rsi<50?'#60a5fa':rsi<70?'#f59e0b':'#ef4444';
+
+    const scoreWidth = (r.score || 0);
+    const scoreColor = scoreWidth>=80?'#22c55e':scoreWidth>=60?'#60a5fa':scoreWidth>=40?'#f59e0b':'#94a3b8';
+
+    const tr = document.createElement('tr');
+    tr.className = `data-row cursor-pointer detail-row ${i%2===0?'':''}`;
+    tr.style.background = i%2===0?'#0f172a':'transparent';
+    tr.onclick = () => showDetail(r);
+    tr.innerHTML = `
+      <td class="px-3 py-2.5 sticky left-0 z-10" style="background:${i%2===0?'#0f172a':'#0d1626'}">
+        <div class="flex items-center gap-2">
+          <div class="w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold shrink-0 relative"
+            style="background:#1e3a5f;color:#60a5fa">
+            ${r.symbol?r.symbol.slice(-2):'??'}
+            <span class="absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+              style="background:#0f172a;font-size:8px">🔍</span>
+          </div>
+          <div>
+            <div class="font-bold text-white" style="font-size:13px">${displayName(r)}</div>
+            <div class="text-slate-500" style="font-size:10px">${r.symbol}${displaySub(r)?' · '+displaySub(r):''}</div>
+          </div>
+        </div>
+      </td>
+      <td class="px-3 py-2.5 text-center">
+        <div class="flex items-center gap-1">
+          <div class="w-12 rounded-full h-1.5" style="background:#1e293b">
+            <div class="h-1.5 rounded-full" style="width:${scoreWidth}%;background:${scoreColor}"></div>
+          </div>
+          <span class="text-xs font-mono" style="color:${scoreColor}">${r.score||0}</span>
+        </div>
+      </td>
+      <td class="px-3 py-2.5 text-center">
+        <span class="badge ${gateC(r.gates_passed)}">${'⭐'.repeat(r.gates_passed)} ${r.gates_passed}/3</span>
+      </td>
+      <td class="px-3 py-2.5 text-center">${dropHtml}</td>
+      <td class="px-3 py-2.5 text-center text-xs">${ma60Html}</td>
+      <td class="px-3 py-2.5 text-center font-mono ${r.debt_ratio_ok?'text-green-400':r.debt_ratio>70?'text-red-400':'text-slate-400'}">${fn(r.debt_ratio,1,'%')}</td>
+      <td class="px-3 py-2.5 text-center font-mono ${r.dividend_yield?'text-blue-400':'text-slate-600'}">${fn(r.dividend_yield,2,'%')}</td>
+      <td class="px-3 py-2.5 text-center font-mono text-xs" style="color:${rsiColor}">${fn(rsi,1)}</td>
+      <td class="px-3 py-2.5 text-center text-xs">${volHtml}</td>
+      <td class="px-3 py-2.5 text-center text-xs">${revHtml}</td>
+      <td class="px-3 py-2.5 text-center">${b2(r.pass_financial)}</td>
+      <td class="px-3 py-2.5 text-center">${b2(r.pass_low_base)}</td>
+      <td class="px-3 py-2.5 text-center">${b2(r.pass_turnaround)}</td>
+      <td class="px-3 py-2.5 text-right font-mono text-slate-300 text-xs whitespace-nowrap">
+        ${r.current_price ? 'NT$'+(+r.current_price).toFixed(1) : '–'}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  ['all','pass3','pass2','revenue'].forEach(t => {
+    document.getElementById('tab-'+t)?.classList.toggle('active', t===tab);
+  });
+  renderTable();
+}
+
+function sortBySelect() {
+  const val = document.getElementById('sortSelect').value;
+  sortAsc = val.endsWith('↑') || ['pb_ratio','price_position_10y','rsi14'].includes(val);
+  sortField = val;
+  renderTable();
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  圖表                                                 ║
+// ╚══════════════════════════════════════════════════════╝
+function renderCharts(data) {
+  const results = (data.results||[]).filter(r=>!r.error);
+  Chart.defaults.color = '#94a3b8';
+  Chart.defaults.font.family = 'Noto Sans TC, sans-serif';
+  Chart.defaults.font.size   = 11;
+
+  // 通過門分布
+  const c1 = document.getElementById('gateChart').getContext('2d');
+  if (charts.gate) charts.gate.destroy();
+  charts.gate = new Chart(c1, {
+    type:'doughnut',
+    data:{
+      labels:['完全通過3門','通過2門','通過1門'],
+      datasets:[{data:[
+        results.filter(r=>r.gates_passed===3).length,
+        results.filter(r=>r.gates_passed===2).length,
+        results.filter(r=>r.gates_passed===1).length,
+      ], backgroundColor:['#22c55e','#f59e0b','#475569'], borderWidth:2, borderColor:'#0f172a', hoverOffset:6}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,cutout:'62%',
+      plugins:{legend:{position:'right',labels:{boxWidth:10,padding:10,color:'#94a3b8'}}}}
+  });
+
+  // 產業
+  const good = results.filter(r=>r.gates_passed>=2&&r.sector);
+  const sm = {};
+  good.forEach(r=>{ sm[r.sector]=(sm[r.sector]||0)+1; });
+  const sorted = Object.entries(sm).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const c2 = document.getElementById('sectorChart').getContext('2d');
+  if (charts.sector) charts.sector.destroy();
+  charts.sector = new Chart(c2, {
+    type:'bar',
+    data:{
+      labels:sorted.map(s=>s[0].replace('Consumer','消費').replace('Financial','金融').replace('Technology','科技').replace('Industrials','工業').replace('Materials','材料').replace('Energy','能源').replace('Healthcare','醫療').replace('Utilities','公用')),
+      datasets:[{data:sorted.map(s=>s[1]),
+        backgroundColor:['#3b82f6','#6366f1','#8b5cf6','#a855f7','#ec4899','#f43f5e','#f97316','#eab308'],
+        borderRadius:6}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:'#64748b',stepSize:1},grid:{color:'#1e293b'}},
+              x:{ticks:{color:'#64748b'},grid:{display:false}}}}
+  });
+
+  // 評分分布直方圖
+  const bins = Array(10).fill(0);
+  results.forEach(r=>{ const b=Math.min(Math.floor((r.score||0)/10),9); bins[b]++; });
+  const c3 = document.getElementById('scoreChart').getContext('2d');
+  if (charts.score) charts.score.destroy();
+  charts.score = new Chart(c3, {
+    type:'bar',
+    data:{
+      labels:['0-9','10-19','20-29','30-39','40-49','50-59','60-69','70-79','80-89','90+'],
+      datasets:[{data:bins,
+        backgroundColor: bins.map((_,i)=>i>=8?'#22c55e':i>=6?'#60a5fa':i>=4?'#f59e0b':'#475569'),
+        borderRadius:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:'#64748b',stepSize:1},grid:{color:'#1e293b'}},
+              x:{ticks:{color:'#64748b',font:{size:9}},grid:{display:false}}}}
+  });
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  詳情 Modal                                           ║
+// ╚══════════════════════════════════════════════════════╝
+function showDetail(r) {
+  const fn  = (v,d=2,s='') => v!=null?(+v).toFixed(d)+s:'–';
+  const b2t = v => v ? '<span class="text-green-400">✅ 是</span>' : '<span class="text-red-400">❌ 否</span>';
+  const pct = (v,d=1) => v!=null?`<span class="${v>=0?'text-green-400':'text-red-400'}">${v>=0?'+':''}${(+v).toFixed(d)}%</span>`:'<span class="text-slate-500">–</span>';
+
+  // 評分顏色
+  const sc = r.score||0;
+  const scColor = sc>=80?'#22c55e':sc>=60?'#60a5fa':sc>=40?'#f59e0b':'#94a3b8';
+
+  // 中文顯示名稱
+  const dname  = displayName(r);
+  const enName = (r.name && r.name !== dname) ? r.name : '';
+
+  // 產業標籤
+  const sectorZh = r.sector_zh || zhSector(r.symbol) || r.sector || '';
+  const subZh    = r.subsector_zh || zhSub(r.symbol) || r.industry || '';
+
+  const gCard = (pass, emoji, title, rows) => `
+    <div class="rounded-xl p-3 mb-2" style="background:${pass?'#052e16':'#161412'};border:1px solid ${pass?'#166534':'#2a2420'}">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="text-base">${pass?'✅':'❌'}</span>
+        <span class="font-bold text-sm ${pass?'text-green-300':'text-slate-400'}">${emoji} ${title}</span>
+        <span class="ml-auto text-xs px-2 py-0.5 rounded-full font-bold" style="background:${pass?'#166534':'#292524'};color:${pass?'#86efac':'#78716c'}">${pass?'通過':'未通過'}</span>
+      </div>
+      <div class="grid grid-cols-2 gap-x-4">
+        ${rows.map(([l,v])=>`
+          <div class="flex justify-between text-xs py-0.5 col-span-1">
+            <span class="text-slate-500">${l}</span><span class="font-mono">${v}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+
+  // 60日跌幅進度條
+  const dropVal = r.drop_60d_pct;
+  const dropBar = dropVal!=null ? `
+    <div class="flex items-center gap-2 mt-1">
+      <div class="flex-1 rounded-full h-2" style="background:#1e293b">
+        <div class="h-2 rounded-full" style="width:${Math.min(Math.abs(dropVal),100)}%;background:${dropVal<=-30?'#22c55e':dropVal<=-20?'#60a5fa':dropVal<0?'#f59e0b':'#94a3b8'}"></div>
+      </div>
+      <span class="text-xs font-mono" style="color:${dropVal<=-30?'#22c55e':dropVal<=-20?'#60a5fa':'#f59e0b'}">${dropVal.toFixed(1)}%</span>
+    </div>` : '';
+
+  document.getElementById('modal-body').innerHTML = `
+    <!-- ▸ 標題區：中文名稱大標 -->
+    <div class="flex items-start justify-between mb-3">
+      <div class="flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <span class="text-2xl font-bold text-white">${dname}</span>
+          <span class="text-slate-400 font-mono text-sm">${r.symbol}</span>
+          ${sc>=80?'<span class="badge bg-green-900 text-green-300 text-xs">🏆 高評分</span>':''}
+          ${r.all_pass?'<span class="badge bg-amber-900 text-amber-300 text-xs">⭐ 完全通過</span>':''}
+          ${r.revenue_turning?'<span class="badge text-xs" style="background:#7c2d12;color:#fdba74">🔥 營收轉正</span>':''}
+        </div>
+        ${enName?`<div class="text-slate-500 text-xs mt-0.5">${enName}</div>`:''}
+        <div class="flex gap-1.5 mt-1.5 flex-wrap">
+          ${sectorZh?`<span class="sector-tag" style="background:#1e3a5f;color:#60a5fa">${sectorZh}</span>`:''}
+          ${subZh && subZh!==sectorZh?`<span class="sector-tag" style="background:#1e293b;color:#94a3b8">${subZh}</span>`:''}
+        </div>
+      </div>
+      <button onclick="closeModal()" class="text-slate-500 hover:text-white w-9 h-9 rounded-full hover:bg-slate-700 flex items-center justify-center text-lg shrink-0 ml-2">✕</button>
+    </div>
+
+    <!-- ▸ 核心數據橫排 -->
+    <div class="grid grid-cols-4 gap-2 mb-4 pb-3" style="border-bottom:1px solid #1e293b">
+      <div class="card-inner p-2.5 text-center">
+        <div class="text-xl font-bold text-white">${r.current_price?'NT$'+fn(r.current_price,1):'–'}</div>
+        <div class="text-xs text-slate-500 mt-0.5">當前股價</div>
+      </div>
+      <div class="card-inner p-2.5 text-center">
+        <div class="text-xl font-bold" style="color:${scColor}">${sc}</div>
+        <div class="text-xs text-slate-500 mt-0.5">綜合評分</div>
+        <div class="w-full rounded-full h-1 mt-1" style="background:#1e293b">
+          <div class="h-1 rounded-full" style="width:${sc}%;background:${scColor}"></div>
+        </div>
+      </div>
+      <div class="card-inner p-2.5 text-center">
+        <div class="text-xl font-bold text-blue-400">${r.pe_ratio?fn(r.pe_ratio,1)+'x':'–'}</div>
+        <div class="text-xs text-slate-500 mt-0.5">本益比</div>
+      </div>
+      <div class="card-inner p-2.5 text-center">
+        <div class="text-xl font-bold text-slate-300">${r.market_cap_b?r.market_cap_b+'億':'–'}</div>
+        <div class="text-xs text-slate-500 mt-0.5">市值</div>
+      </div>
+    </div>
+
+    <!-- ▸ 篩選門結果 -->
+    ${gCard(r.pass_financial,'🛡','財務防護門',[
+      ['EPS連5年正', b2t(r.eps_5yr_positive) + (r.eps_years_positive?' <span class="text-slate-400">('+r.eps_years_positive+'年)</span>':'')],
+      ['負債比率', fn(r.debt_ratio,1,'%') + (r.debt_ratio_ok?' <span class="text-green-400 text-xs">✓ 達標</span>':' <span class="text-red-400 text-xs">偏高</span>')],
+      ['殖利率', `<span class="text-blue-400">${fn(r.dividend_yield,2,'%')}</span>`],
+      ['配息紀錄', b2t(r.has_dividend)],
+    ])}
+    ${gCard(r.pass_low_base,'📉','低基期門（錯殺偵測）',[
+      ['60日跌幅', `<span class="font-mono ${r.drop_60d_pct!=null&&r.drop_60d_pct<=-30?'text-green-400':'text-red-400'}">${r.drop_60d_pct!=null?r.drop_60d_pct.toFixed(1)+'%':'–'}</span>` + (r.drawdown_ok?' <span class="text-green-400 text-xs">✓ 過門檻</span>':' <span class="text-red-400 text-xs">未過門檻</span>')],
+      ['60日前股價', r.price_60d_ago?'NT$'+fn(r.price_60d_ago,1):'–'],
+      ['當前股價', r.current_price?'NT$'+fn(r.current_price,1):'–'],
+      ['門檻設定', '<span class="text-orange-400">下跌 30% 以上</span>'],
+    ])}
+    ${gCard(r.pass_turnaround,'🚀','轉機訊號門',[
+      ['站上 MA60', b2t(r.above_60ma) + ` <span class="text-slate-500 text-xs">(MA60=${fn(r.ma60,1)})</span>`],
+      ['黃金交叉', b2t(r.golden_cross)],
+      ['量能月變化', pct(r.volume_change_pct)],
+      [`RSI14 <span class="text-slate-500">${r.rsi14&&r.rsi14<30?'超賣':r.rsi14&&r.rsi14<50?'低檔':''}</span>`, `<span class="font-mono" style="color:${!r.rsi14?'#94a3b8':r.rsi14<30?'#22c55e':r.rsi14<50?'#60a5fa':r.rsi14<70?'#f59e0b':'#ef4444'}">${fn(r.rsi14,1)}</span>`],
+    ])}
+    ${gCard(r.revenue_data_ok,'📈','月營收分析',[
+      ['年增率 YoY', pct(r.revenue_yoy)],
+      ['月增率 MoM', pct(r.revenue_mom)],
+      ['3月均 YoY', pct(r.revenue_3m_trend)],
+      ['由負轉正', b2t(r.revenue_turning)],
+    ])}
+
+    <!-- ▸ 外部連結 -->
+    <div class="grid grid-cols-3 gap-2 mt-3">
+      <a href="https://tw.stock.yahoo.com/quote/${r.symbol}" target="_blank"
+        class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-xs font-medium text-white transition-all hover:scale-105"
+        style="background:#1e3a5f">
+        <i class="fas fa-chart-line text-blue-400 text-sm"></i>
+        <span>Yahoo 股市</span>
+      </a>
+      <a href="https://goodinfo.tw/tw/StockDividendPolicy.asp?STOCK_ID=${r.symbol}" target="_blank"
+        class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all hover:scale-105"
+        style="background:#1e293b;color:#94a3b8">
+        <i class="fas fa-coins text-yellow-500 text-sm"></i>
+        <span>GoodInfo 股利</span>
+      </a>
+      <a href="https://stockcharts.com/h-sc/ui?s=${r.symbol}.TW" target="_blank"
+        class="flex flex-col items-center justify-center gap-1 py-2.5 rounded-xl text-xs font-medium transition-all hover:scale-105"
+        style="background:#1e293b;color:#94a3b8">
+        <i class="fas fa-chart-bar text-purple-400 text-sm"></i>
+        <span>K線圖表</span>
+      </a>
+    </div>`;
+
+  document.getElementById('modal').style.display = 'flex';
+}
+function closeModal() { document.getElementById('modal').style.display = 'none'; }
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  執行篩選                                             ║
+// ╚══════════════════════════════════════════════════════╝
+async function triggerScreening() {
+  const btn = document.getElementById('runBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 篩選中';
+  setStatusDot('yellow','篩選進行中...');
+
+  document.getElementById('skel').classList.add('hidden');
+  document.getElementById('tbl-wrap').classList.add('hidden');
+  document.getElementById('empty').classList.add('hidden');
+  document.getElementById('progress-panel').classList.remove('hidden');
+
+  let progress = 3;
+  const stages = [
+    [10,'🔌 連接台股資料源','載入股票清單'],
+    [25,'🛡 財務防護門篩選','EPS / 負債比 / 配息'],
+    [50,'📉 低基期辨識門','PB值 / 10年價格位階'],
+    [72,'🚀 轉機訊號門','MA60 / 量能 / RSI'],
+    [88,'📈 月營收分析','FinMind YoY'],
+    [95,'📝 整理結果','產出報表'],
+  ];
+  let si = 0;
+
+  const progTimer = setInterval(() => {
+    if (progress < 93) {
+      progress += Math.random() * 2 + 0.3;
+      const p = Math.min(progress, 93);
+      document.getElementById('prog-bar').style.width = p + '%';
+      document.getElementById('prog-pct').textContent  = p.toFixed(0) + '%';
+      if (si < stages.length && p >= stages[si][0]) {
+        document.getElementById('prog-text').textContent = stages[si][1];
+        document.getElementById('prog-sub').textContent  = stages[si][2];
+        si++;
+      }
+    }
+  }, 700);
+
+  // 即時 log 輪詢
+  let logSince = 0;
+  logTimer = setInterval(async () => {
+    try {
+      const { data } = await ax.get('/api/log/screen');
+      const logs = (data.logs||[]).filter(l => l.t > logSince);
+      if (logs.length) {
+        logSince = logs[logs.length-1].t;
+        const box = document.getElementById('screen-log');
+        logs.forEach(l => {
+          const div = document.createElement('div');
+          div.textContent = l.msg;
+          box.appendChild(div);
+        });
+        box.scrollTop = box.scrollHeight;
+      }
+    } catch {}
+  }, 1500);
+
+  try {
+    await ax.post('/api/screen', {}, { timeout: 15000 });
+
+    // 輪詢完成
+    clearInterval(pollTimer);
+    pollTimer = setInterval(async () => {
+      const s = await checkStatus();
+      if (!s.screening && s.dataExists) {
+        clearInterval(pollTimer);
+        clearInterval(logTimer);
+        clearInterval(progTimer);
+        document.getElementById('prog-bar').style.width = '100%';
+        document.getElementById('prog-pct').textContent  = '100%';
+        document.getElementById('prog-text').textContent = '✅ 篩選完成！';
+        setStatusDot('green','資料就緒');
+        setTimeout(async () => {
+          document.getElementById('progress-panel').classList.add('hidden');
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fas fa-play"></i> 執行篩選';
+          await loadResults();
+        }, 800);
+      }
+    }, 4000);
+  } catch (e) {
+    clearInterval(progTimer);
+    clearInterval(logTimer);
+    document.getElementById('progress-panel').classList.add('hidden');
+    document.getElementById('empty').classList.remove('hidden');
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play"></i> 執行篩選';
+    setStatusDot('red','連線失敗');
+    alert('連線失敗：' + e.message);
+  }
+}
+
+async function stopScreening() {
+  await ax.post('/api/screen/stop');
+  clearInterval(pollTimer);
+  clearInterval(logTimer);
+  document.getElementById('runBtn').disabled = false;
+  document.getElementById('runBtn').innerHTML = '<i class="fas fa-play"></i> 執行篩選';
+  document.getElementById('progress-panel').classList.add('hidden');
+  setStatusDot('gray','已中止');
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  回測                                                 ║
+// ╚══════════════════════════════════════════════════════╝
+async function loadBacktest() {
+  try {
+    const { data } = await ax.get('/api/backtest');
+    if (data.status === 'no_data') return;
+    btData = data.results || [];
+    renderBacktest(data);
+  } catch {}
+}
+
+async function triggerBacktest() {
+  const btn = document.getElementById('btBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> 回測中';
+
+  const hold = document.getElementById('holdDays').value;
+  document.getElementById('bt-empty').style.display = 'none';
+  document.getElementById('bt-progress').classList.remove('hidden');
+  document.getElementById('bt-stats').style.display = 'none';
+  document.getElementById('bt-charts').style.display = 'none';
+  document.getElementById('bt-table-wrap').style.display = 'none';
+
+  let p = 5;
+  const ptimer = setInterval(() => {
+    if (p < 88) { p += Math.random()*3+0.5; document.getElementById('bt-prog-bar').style.width=Math.min(p,88)+'%'; }
+  }, 600);
+
+  let logSince2 = 0;
+  btLogTimer = setInterval(async () => {
+    try {
+      const { data } = await ax.get('/api/log/backtest');
+      const logs = (data.logs||[]).filter(l=>l.t>logSince2);
+      if (logs.length) {
+        logSince2 = logs[logs.length-1].t;
+        const box = document.getElementById('bt-log');
+        logs.forEach(l => { const d=document.createElement('div'); d.textContent=l.msg; box.appendChild(d); });
+        box.scrollTop = box.scrollHeight;
+      }
+    } catch {}
+  }, 1500);
+
+  try {
+    await ax.post('/api/backtest', { hold_days: parseInt(hold) });
+
+    clearInterval(btPollTimer);
+    btPollTimer = setInterval(async () => {
+      const s = await checkStatus();
+      if (!s.backtesting && s.backtestExists) {
+        clearInterval(btPollTimer);
+        clearInterval(btLogTimer);
+        clearInterval(ptimer);
+        document.getElementById('bt-prog-bar').style.width = '100%';
+        document.getElementById('bt-progress').classList.add('hidden');
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-play"></i> 開始回測';
+        await loadBacktest();
+      }
+    }, 4000);
+  } catch (e) {
+    clearInterval(ptimer);
+    clearInterval(btLogTimer);
+    document.getElementById('bt-progress').classList.add('hidden');
+    document.getElementById('bt-empty').style.display = 'block';
+    btn.disabled = false;
+    btn.innerHTML = '<i class="fas fa-play"></i> 開始回測';
+    alert('回測失敗：' + e.message);
+  }
+}
+
+async function stopBacktest() {
+  await ax.post('/api/backtest/stop');
+  clearInterval(btPollTimer);
+  clearInterval(btLogTimer);
+  document.getElementById('btBtn').disabled = false;
+  document.getElementById('btBtn').innerHTML = '<i class="fas fa-play"></i> 開始回測';
+  document.getElementById('bt-progress').classList.add('hidden');
+}
+
+function renderBacktest(data) {
+  if (!data) return;
+  const results = data.results || [];
+  if (!results.length) {
+    document.getElementById('bt-empty').style.display='block';
+    return;
+  }
+
+  document.getElementById('bt-empty').style.display='none';
+  document.getElementById('bt-stats').style.display='grid';
+  document.getElementById('bt-charts').style.display='grid';
+  document.getElementById('bt-table-wrap').style.display='block';
+
+  document.getElementById('bt-tested').textContent   = data.total_tested || 0;
+  document.getElementById('bt-winrate').textContent   = (data.overall_win_rate||0) + '%';
+  document.getElementById('bt-avgret').textContent    = (data.overall_avg_return||0) + '%';
+  document.getElementById('bt-signals').textContent   =
+    results.reduce((s,r)=>s+(r.total_signals||0),0);
+
+  // 勝率圖
+  const top = results.slice(0,12);
+  const c1  = document.getElementById('btWinChart').getContext('2d');
+  if (charts.btWin) charts.btWin.destroy();
+  charts.btWin = new Chart(c1, {
+    type:'bar',
+    data:{
+      labels: top.map(r=>r.symbol),
+      datasets:[{
+        label:'勝率%',
+        data: top.map(r=>r.win_rate),
+        backgroundColor: top.map(r=>r.win_rate>=60?'#22c55e':r.win_rate>=50?'#3b82f6':'#f59e0b'),
+        borderRadius:6,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{min:0,max:100,ticks:{color:'#64748b',stepSize:20},grid:{color:'#1e293b'}},
+              x:{ticks:{color:'#64748b'},grid:{display:false}}}}
+  });
+
+  // 報酬圖
+  const c2 = document.getElementById('btRetChart').getContext('2d');
+  if (charts.btRet) charts.btRet.destroy();
+  charts.btRet = new Chart(c2, {
+    type:'bar',
+    data:{
+      labels: top.map(r=>r.symbol),
+      datasets:[{
+        label:'平均報酬%',
+        data: top.map(r=>r.avg_return),
+        backgroundColor: top.map(r=>r.avg_return>0?'#22c55e':'#ef4444'),
+        borderRadius:6,
+      }]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{y:{ticks:{color:'#64748b'},grid:{color:'#1e293b'}},
+              x:{ticks:{color:'#64748b'},grid:{display:false}}}}
+  });
+
+  // 明細表
+  const tbody = document.getElementById('bt-tbody');
+  tbody.innerHTML = '';
+  results.forEach((r,i) => {
+    const tr = document.createElement('tr');
+    tr.style.background = i%2===0?'#0f172a':'transparent';
+    const lastSig = (r.signals||[]).slice(-1)[0];
+    tr.innerHTML = `
+      <td class="px-3 py-2 text-white font-medium">${r.symbol}</td>
+      <td class="px-3 py-2 text-center text-slate-300">${r.total_signals}</td>
+      <td class="px-3 py-2 text-center font-bold ${r.win_rate>=60?'text-green-400':r.win_rate>=50?'text-blue-400':'text-amber-400'}">${r.win_rate}%</td>
+      <td class="px-3 py-2 text-center font-mono ${r.avg_return>0?'text-green-400':'text-red-400'}">${r.avg_return>0?'+':''}${r.avg_return}%</td>
+      <td class="px-3 py-2 text-center font-mono text-green-400">+${r.max_return}%</td>
+      <td class="px-3 py-2 text-center font-mono text-red-400">${r.min_return}%</td>
+      <td class="px-3 py-2 text-center text-slate-400">${r.std_return}%</td>
+      <td class="px-3 py-2 text-center text-slate-400 text-xs">${lastSig?lastSig.date:'–'}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  設定頁                                               ║
+// ╚══════════════════════════════════════════════════════╝
+async function loadSettings() {
+  try {
+    const { data } = await ax.get('/api/config');
+    if (data.line_token_set)    document.getElementById('set-line-token').placeholder = '已設定（輸入新值可更新）';
+    if (data.finmind_token_set) document.getElementById('set-finmind-token').placeholder = '已設定（輸入新值可更新）';
+    document.getElementById('set-notify-gates').value  = data.notify_min_gates || 2;
+    document.getElementById('set-sched-enabled').checked = !!data.schedule_enabled;
+    document.getElementById('set-sched-time').value = data.schedule_time || '18:00';
+    document.getElementById('set-workers').value = data.max_workers || 6;
+    document.getElementById('set-pool').value    = data.stock_pool_size || 500;
+    document.getElementById('set-drop-min').value = data.filters?.drop_60d_min ?? 30;
+    document.getElementById('set-debt-max').value= data.filters?.debt_ratio_max ?? 50;
+    document.getElementById('set-req-div').checked = data.filters?.require_dividend !== false;
+    document.getElementById('set-req-eps').checked = data.filters?.require_eps_positive !== false;
+
+    // 排程日
+    const days = data.schedule_days || ['Mon','Tue','Wed','Thu','Fri'];
+    document.querySelectorAll('.day-cb').forEach(cb => {
+      cb.checked = days.includes(cb.value);
+    });
+
+    // 狀態徽章
+    const badge = document.getElementById('sched-badge');
+    if (data.schedule_enabled) {
+      badge.className = 'badge';
+      badge.style.background = '#14532d'; badge.style.color = '#86efac';
+      badge.textContent = `✅ 啟用 (${data.schedule_time})`;
+    } else {
+      badge.className = 'badge';
+      badge.style.background = '#1e293b'; badge.style.color = '#64748b';
+      badge.textContent = '未啟用';
+    }
+    if (data.last_run) {
+      document.getElementById('last-run-time').textContent = new Date(data.last_run).toLocaleString('zh-TW');
+    }
+    if (data.run_at) {
+      document.getElementById('data-version').textContent = new Date(data.run_at).toLocaleDateString('zh-TW');
+    }
+  } catch (e) { console.error(e); }
+}
+
+async function saveSettings() {
+  const days = [...document.querySelectorAll('.day-cb:checked')].map(c=>c.value);
+  const body = {
+    notify_min_gates: parseInt(document.getElementById('set-notify-gates').value),
+    schedule_enabled: document.getElementById('set-sched-enabled').checked,
+    schedule_time:    document.getElementById('set-sched-time').value,
+    schedule_days:    days,
+    max_workers:      parseInt(document.getElementById('set-workers').value),
+    stock_pool_size:  parseInt(document.getElementById('set-pool').value),
+    filters: {
+      drop_60d_min:         parseFloat(document.getElementById('set-drop-min').value) || 30,
+      debt_ratio_max:       parseFloat(document.getElementById('set-debt-max').value) || 50,
+      require_dividend:     document.getElementById('set-req-div').checked,
+      require_eps_positive: document.getElementById('set-req-eps').checked,
+    }
+  };
+  const lt = document.getElementById('set-line-token').value.trim();
+  if (lt) body.line_token = lt;
+  const ft = document.getElementById('set-finmind-token').value.trim();
+  if (ft) body.finmind_token = ft;
+
+  try {
+    await ax.post('/api/config', body);
+    showToast('✅ 設定已儲存！');
+    updateConfigBadges();
+    loadSettings();
+  } catch (e) {
+    showToast('❌ 儲存失敗：' + e.message, true);
+  }
+}
+
+async function testLine() {
+  const statusEl = document.getElementById('line-status');
+  try {
+    await saveSettings();
+    await ax.post('/api/line/test');
+    statusEl.className = 'text-xs rounded-lg p-2 bg-green-900 text-green-300';
+    statusEl.textContent = '✅ 測試訊息已送出，請查看 LINE';
+    statusEl.classList.remove('hidden');
+  } catch (e) {
+    statusEl.className = 'text-xs rounded-lg p-2 bg-red-900 text-red-300';
+    statusEl.textContent = '❌ 失敗：' + e.message;
+    statusEl.classList.remove('hidden');
+  }
+}
+
+async function manualSend() {
+  try {
+    await ax.post('/api/line/send');
+    showToast('📱 推播已送出！');
+  } catch (e) {
+    showToast('❌ 推播失敗：'+e.message, true);
+  }
+}
+
+function updateConfigBadges() {
+  ax.get('/api/config').then(({ data }) => {
+    const f = data.filters || {};
+    document.getElementById('cfg-eps').textContent  = f.require_eps_positive ? '啟用' : '停用';
+    document.getElementById('cfg-debt').textContent = `<${f.debt_ratio_max||50}%`;
+    document.getElementById('cfg-div').textContent  = f.require_dividend ? '啟用' : '停用';
+    const dropEl = document.getElementById('cfg-drop');
+    if (dropEl) dropEl.textContent = `>${f.drop_60d_min||30}%`;
+  }).catch(()=>{});
+}
+
+function toggleTokenVisible(id) {
+  const el = document.getElementById(id);
+  el.type = el.type === 'password' ? 'text' : 'password';
+}
+
+// ╔══════════════════════════════════════════════════════╗
+// ║  Toast 通知                                           ║
+// ╚══════════════════════════════════════════════════════╝
+function showToast(msg, isErr=false) {
+  const t = document.createElement('div');
+  t.className = 'fixed bottom-5 right-5 z-50 px-4 py-2.5 rounded-xl text-sm font-medium shadow-xl';
+  t.style.background = isErr ? '#7f1d1d' : '#14532d';
+  t.style.color      = isErr ? '#fca5a5' : '#86efac';
+  t.style.border     = isErr ? '1px solid #991b1b' : '1px solid #166534';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(() => t.remove(), 3000);
+}
+
+// ══ 啟動 ══
+init();
+</script>
+</body>
+</html>
