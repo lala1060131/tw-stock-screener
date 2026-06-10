@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tw-stock-screener
+    runtime: node
+    buildCommand: pip install -r requirements.txt
+    startCommand: node server.cjs
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.11.0"
+      - key: NODE_VERSION
+        value: "18.18.0"

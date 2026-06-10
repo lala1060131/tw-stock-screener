@@ -9,7 +9,7 @@ const path     = require('path');
 const url      = require('url');
 const readline = require('readline');
 
-const PORT      = 3000;
+const PORT      = process.env.PORT || 3000;
 const BASE_DIR  = __dirname;
 const DATA_DIR  = path.join(BASE_DIR, 'data');
 const PY_DIR    = path.join(BASE_DIR, 'python');
