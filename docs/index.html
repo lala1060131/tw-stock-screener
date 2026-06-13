@@ -1,0 +1,916 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>台股低基期選股機器人 v4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+
+:root{
+  --bg:#08090f;
+  --surface:#0d0f1e;
+  --card:#131628;
+  --card2:#0f1220;
+  --border:#222540;
+  --border-lg:#2d3160;
+  --gold:#d4a843;
+  --gold-lt:#f0c958;
+  --gold-grd:linear-gradient(135deg,#9a7010 0%,#d4a843 35%,#f0c958 55%,#d4a843 75%,#9a7010 100%);
+  --blue:#60a5fa;
+  --blue-d:#3b82f6;
+  --orange:#fb923c;
+  --green:#4ade80;
+  --red:#f87171;
+  --text:#e2e8f0;
+  --dim:#7c8db5;
+  --muted:#3d4a6a;
+  --radius:12px;
+  --radius-sm:8px;
+}
+
+html{scroll-behavior:smooth}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:'Noto Sans TC','PingFang TC','Microsoft JhengHei',sans-serif;
+  min-height:100vh;
+  -webkit-font-smoothing:antialiased;
+}
+
+.mono{
+  font-family:'Space Grotesk','Noto Sans TC',monospace;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Layout */
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+
+/* Header */
+.header{
+  background:linear-gradient(180deg,#0d0f22 0%,#08090f 100%);
+  border-bottom:1px solid var(--border);
+  padding:20px 0 16px;
+  position:sticky;top:0;z-index:100;
+  backdrop-filter:blur(14px);
+}
+.header-inner{display:flex;align-items:center;gap:18px}
+.logo{flex-shrink:0;filter:drop-shadow(0 0 18px rgba(212,168,67,0.45))}
+.header-text h1{
+  font-size:clamp(.95rem,3.5vw,1.4rem);
+  font-weight:900;
+  background:var(--gold-grd);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  background-clip:text;
+  letter-spacing:-.02em;line-height:1.2;
+}
+.header-text p{font-size:.72rem;color:var(--dim);margin-top:3px;font-family:'Space Grotesk',sans-serif}
+.header-right{margin-left:auto}
+.api-pill{
+  font-family:'Space Grotesk',monospace;font-size:.7rem;
+  color:var(--dim);background:var(--card);
+  border:1px solid var(--border);border-radius:20px;
+  padding:4px 12px;white-space:nowrap;
+}
+.api-pill em{color:var(--gold);font-style:normal;font-weight:700}
+
+/* Main */
+main{padding:20px 0 60px}
+
+/* Cards */
+.card{
+  background:var(--card);border:1px solid var(--border);
+  border-radius:var(--radius);padding:18px 20px;margin-bottom:14px;
+}
+.card-title{
+  font-size:.72rem;font-weight:700;color:var(--dim);
+  text-transform:uppercase;letter-spacing:.08em;margin-bottom:14px;
+}
+
+/* Gates grid */
+.gates-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media(max-width:620px){.gates-grid{grid-template-columns:1fr}}
+
+.gate-card{
+  background:var(--card2);border-radius:var(--radius-sm);
+  padding:14px;border-left:3px solid transparent;
+}
+.gate-card.g1{border-color:var(--blue)}
+.gate-card.g2{border-color:var(--orange)}
+.gate-card.g3{border-color:var(--green)}
+
+.gate-label{
+  font-size:.68rem;font-weight:700;letter-spacing:.05em;
+  margin-bottom:12px;display:flex;align-items:center;gap:6px;
+}
+.g1 .gate-label{color:var(--blue)}
+.g2 .gate-label{color:var(--orange)}
+.g3 .gate-label{color:var(--green)}
+.gdot{width:6px;height:6px;border-radius:50%;background:currentColor;box-shadow:0 0 5px currentColor}
+
+.frow{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;gap:8px}
+.flabel{font-size:.7rem;color:var(--dim);flex:1}
+
+.finput{
+  background:var(--card);border:1px solid var(--border-lg);
+  color:var(--text);border-radius:6px;padding:4px 8px;
+  font-size:.76rem;font-family:'Space Grotesk',monospace;
+  width:72px;text-align:right;outline:none;transition:border .2s;
+}
+.finput:focus{border-color:var(--gold)}
+.finput.wide{width:90px}
+
+.tog{position:relative;width:36px;height:20px;cursor:pointer}
+.tog input{opacity:0;width:0;height:0}
+.tslider{
+  position:absolute;inset:0;background:var(--border);
+  border-radius:20px;transition:.3s;
+}
+.tslider::before{
+  content:'';position:absolute;
+  width:14px;height:14px;left:3px;top:3px;
+  background:#fff;border-radius:50%;transition:.3s;
+}
+.tog input:checked+.tslider{background:var(--blue-d)}
+.tog input:checked+.tslider::before{transform:translateX(16px)}
+
+/* Action bar */
+.action-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+
+.btn{
+  display:inline-flex;align-items:center;gap:7px;
+  padding:10px 20px;border-radius:10px;
+  font-size:.82rem;font-weight:700;cursor:pointer;
+  border:none;transition:all .15s;
+  font-family:'Noto Sans TC',sans-serif;white-space:nowrap;
+}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+
+.btn-go{
+  background:var(--gold-grd);color:#0a0800;
+  box-shadow:0 4px 18px rgba(212,168,67,.35);
+}
+.btn-go:not(:disabled):hover{
+  box-shadow:0 6px 26px rgba(212,168,67,.55);
+  transform:translateY(-1px);
+}
+.btn-stop{
+  background:rgba(248,113,113,.12);color:var(--red);
+  border:1px solid rgba(248,113,113,.3);
+}
+.btn-stop:hover{background:rgba(248,113,113,.22)}
+.btn-ghost{
+  background:var(--card);color:var(--dim);
+  border:1px solid var(--border);
+}
+.btn-ghost:hover{color:var(--text);border-color:var(--border-lg)}
+
+.hint-txt{font-size:.7rem;color:var(--muted);margin-left:4px}
+.hint-txt strong{color:var(--dim)}
+
+/* Progress */
+.prog-section{display:none}
+.prog-section.on{display:block}
+
+.prog-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:7px}
+.prog-lbl{font-size:.76rem;color:var(--dim);font-family:'Space Grotesk',sans-serif}
+.prog-pct{font-family:'Space Grotesk',monospace;font-size:.82rem;font-weight:700;color:var(--gold)}
+
+.prog-bar{
+  width:100%;height:5px;background:var(--border);
+  border-radius:3px;overflow:hidden;margin-bottom:10px;
+}
+.prog-fill{
+  height:100%;background:var(--gold-grd);
+  border-radius:3px;transition:width .35s ease;
+  box-shadow:0 0 10px rgba(212,168,67,.4);width:0%;
+}
+
+.phases{display:flex;gap:8px;margin-bottom:10px}
+.ptag{
+  font-size:.66rem;font-family:'Space Grotesk',sans-serif;
+  padding:2px 10px;border-radius:12px;
+  border:1px solid transparent;color:var(--muted);
+}
+.ptag.active{color:var(--gold);border-color:rgba(212,168,67,.4);background:rgba(212,168,67,.07)}
+.ptag.done{color:var(--green);border-color:rgba(74,222,128,.3);background:rgba(74,222,128,.05)}
+
+.log-box{
+  background:#050608;border:1px solid var(--border);
+  border-radius:var(--radius-sm);padding:10px 12px;
+  height:140px;overflow-y:auto;
+  font-family:'Space Grotesk',monospace;font-size:.7rem;
+  color:#67e8f9;
+  scrollbar-width:thin;scrollbar-color:var(--border) transparent;
+}
+.log-box::-webkit-scrollbar{width:3px}
+.log-box::-webkit-scrollbar-thumb{background:var(--border);border-radius:3px}
+.ll{margin-bottom:3px;line-height:1.55}
+.ll.w{color:var(--orange)}
+.ll.ok{color:var(--green)}
+.ll.e{color:var(--red)}
+.ll.i{color:#93c5fd}
+
+/* Results */
+.res-hdr{
+  display:flex;align-items:center;justify-content:space-between;
+  margin-bottom:14px;flex-wrap:wrap;gap:8px;
+}
+.res-title{font-size:.88rem;font-weight:700;display:flex;align-items:center;gap:10px}
+.res-count{font-family:'Space Grotesk',monospace;font-size:.76rem;color:var(--dim)}
+.res-count strong{color:var(--gold);font-size:.95rem;font-weight:700}
+
+.ftabs{display:flex;gap:6px}
+.ftab{
+  font-size:.7rem;font-weight:700;padding:4px 12px;
+  border-radius:20px;cursor:pointer;
+  border:1px solid var(--border);color:var(--dim);
+  background:transparent;transition:all .15s;
+  font-family:'Noto Sans TC',sans-serif;
+}
+.ftab.on{
+  background:rgba(212,168,67,.1);
+  border-color:rgba(212,168,67,.4);color:var(--gold);
+}
+
+/* Table */
+.tbl-wrap{overflow-x:auto;border-radius:var(--radius);border:1px solid var(--border)}
+table{width:100%;border-collapse:collapse;min-width:600px}
+thead th{
+  background:var(--card2);padding:10px 14px;
+  text-align:left;font-size:.67rem;font-weight:700;
+  color:var(--muted);text-transform:uppercase;letter-spacing:.06em;
+  white-space:nowrap;cursor:pointer;user-select:none;
+}
+thead th:hover{color:var(--dim)}
+thead th.sorted{color:var(--gold)}
+.tharr{font-size:.58rem;margin-left:3px}
+
+tbody tr.drow{
+  border-bottom:1px solid rgba(34,37,64,.7);
+  cursor:pointer;transition:background .1s;
+}
+tbody tr.drow:hover{background:rgba(30,36,70,.55)}
+tbody tr.drow.hl{
+  background:rgba(212,168,67,.04);
+  border-bottom-color:rgba(212,168,67,.12);
+}
+tbody td{padding:10px 14px;font-size:.8rem;vertical-align:middle}
+
+.tcell{font-family:'Space Grotesk',monospace;font-weight:700;color:var(--gold);font-size:.85rem}
+.ncell{font-weight:500;max-width:90px}
+.stag{
+  display:inline-block;font-size:.6rem;padding:1px 6px;
+  border-radius:4px;background:rgba(96,165,250,.1);
+  color:var(--blue);font-weight:600;margin-top:2px;white-space:nowrap;
+}
+.dropcell{font-family:'Space Grotesk',monospace;font-weight:700;color:var(--orange)}
+.pcell{font-family:'Space Grotesk',monospace;font-size:.78rem;color:var(--dim)}
+
+.gdots{display:flex;gap:5px;align-items:center}
+.gd{
+  width:9px;height:9px;border-radius:50%;
+  border:1.5px solid transparent;transition:all .15s;
+}
+.gd.on{box-shadow:0 0 6px currentColor}
+.gd.d1.on{color:var(--blue);background:var(--blue);border-color:var(--blue)}
+.gd.d2.on{color:var(--orange);background:var(--orange);border-color:var(--orange)}
+.gd.d3.on{color:var(--green);background:var(--green);border-color:var(--green)}
+.gd.off{background:transparent;border-color:var(--border-lg)}
+
+.stars{color:var(--gold);font-size:.82rem;letter-spacing:-1px}
+
+/* Detail row */
+tbody tr.detrow td{padding:0;background:var(--card2)}
+.det-panel{
+  padding:16px 20px;
+  display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));
+  gap:12px;border-top:1px solid var(--border);
+}
+.di{display:flex;flex-direction:column;gap:3px}
+.dk{
+  font-size:.62rem;color:var(--muted);
+  text-transform:uppercase;letter-spacing:.06em;
+  font-family:'Space Grotesk',sans-serif;
+}
+.dv{
+  font-family:'Space Grotesk',monospace;
+  font-size:.86rem;font-weight:600;color:var(--text);
+}
+.dv.ok{color:var(--green)}.dv.bad{color:var(--red)}.dv.warn{color:var(--orange)}
+
+/* Empty state */
+.empty{text-align:center;padding:56px 20px;color:var(--muted)}
+.empty svg{opacity:.18;margin-bottom:12px}
+.empty p{font-size:.82rem}
+.empty p+p{margin-top:6px;font-size:.7rem;color:var(--muted)}
+
+@media(max-width:520px){
+  .header-text h1{font-size:.9rem}
+  .logo svg{width:42px;height:48px}
+  tbody td{padding:8px 10px;font-size:.75rem}
+  .det-panel{grid-template-columns:repeat(2,1fr)}
+}
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header class="header">
+<div class="wrap">
+<div class="header-inner">
+  <div class="logo">
+    <svg width="54" height="62" viewBox="0 0 80 92" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="3.5" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <filter id="eglow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="2.8" result="b"/>
+          <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+        </filter>
+        <linearGradient id="gg" x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stop-color="#8a6008"/>
+          <stop offset="35%" stop-color="#d4a843"/>
+          <stop offset="55%" stop-color="#f2cb5a"/>
+          <stop offset="80%" stop-color="#d4a843"/>
+          <stop offset="100%" stop-color="#7a5005"/>
+        </linearGradient>
+        <linearGradient id="bg" x1="0%" y1="0%" x2="0%" y2="100%">
+          <stop offset="0%" stop-color="#1d2158"/>
+          <stop offset="100%" stop-color="#0a0c26"/>
+        </linearGradient>
+        <radialGradient id="eg" cx="38%" cy="28%" r="68%">
+          <stop offset="0%" stop-color="#d0f0ff"/>
+          <stop offset="45%" stop-color="#38bdf8"/>
+          <stop offset="100%" stop-color="#0264a0"/>
+        </radialGradient>
+      </defs>
+      <!-- Antenna -->
+      <line x1="40" y1="6" x2="40" y2="18" stroke="url(#gg)" stroke-width="2.5" stroke-linecap="round"/>
+      <circle cx="40" cy="3.5" r="5" fill="url(#gg)" filter="url(#glow)"/>
+      <!-- Head -->
+      <rect x="13" y="18" width="54" height="38" rx="9" fill="url(#bg)" stroke="url(#gg)" stroke-width="1.6"/>
+      <rect x="15" y="19" width="50" height="11" rx="7" fill="rgba(255,255,255,0.04)"/>
+      <!-- Eyes -->
+      <circle cx="27" cy="35" r="8.5" fill="url(#eg)" filter="url(#eglow)"/>
+      <circle cx="53" cy="35" r="8.5" fill="url(#eg)" filter="url(#eglow)"/>
+      <circle cx="24.5" cy="32" r="2.8" fill="rgba(255,255,255,0.88)"/>
+      <circle cx="50.5" cy="32" r="2.8" fill="rgba(255,255,255,0.88)"/>
+      <circle cx="28" cy="36.5" r="3.8" fill="#0c4a6e" opacity="0.45"/>
+      <circle cx="54" cy="36.5" r="3.8" fill="#0c4a6e" opacity="0.45"/>
+      <!-- Mouth pixels -->
+      <rect x="21" y="47" width="5.5" height="3.5" rx="1.5" fill="url(#gg)" opacity="0.95"/>
+      <rect x="28.5" y="47" width="5.5" height="3.5" rx="1.5" fill="#f2cb5a" opacity="0.6"/>
+      <rect x="36" y="47" width="8" height="3.5" rx="1.5" fill="url(#gg)" opacity="0.95"/>
+      <rect x="46" y="47" width="5.5" height="3.5" rx="1.5" fill="#f2cb5a" opacity="0.6"/>
+      <rect x="53.5" y="47" width="5.5" height="3.5" rx="1.5" fill="url(#gg)" opacity="0.95"/>
+      <!-- Body -->
+      <rect x="9" y="60" width="62" height="32" rx="9" fill="url(#bg)" stroke="url(#gg)" stroke-width="1.6"/>
+      <rect x="11" y="61" width="58" height="9" rx="7" fill="rgba(255,255,255,0.03)"/>
+      <!-- Chest -->
+      <circle cx="40" cy="75" r="7.5" fill="none" stroke="url(#gg)" stroke-width="1.6"/>
+      <circle cx="40" cy="75" r="3.8" fill="url(#gg)" filter="url(#glow)"/>
+      <!-- Circuit lines -->
+      <line x1="17" y1="73" x2="28" y2="73" stroke="#d4a843" stroke-width="1.3" opacity="0.4"/>
+      <line x1="17" y1="77" x2="25" y2="77" stroke="#d4a843" stroke-width="1.1" opacity="0.22"/>
+      <line x1="52" y1="73" x2="63" y2="73" stroke="#d4a843" stroke-width="1.3" opacity="0.4"/>
+      <line x1="55" y1="77" x2="63" y2="77" stroke="#d4a843" stroke-width="1.1" opacity="0.22"/>
+      <!-- LED -->
+      <circle cx="20" cy="73" r="2.8" fill="#60a5fa" filter="url(#eglow)" opacity="0.88"/>
+      <circle cx="60" cy="73" r="2.8" fill="#4ade80" filter="url(#eglow)" opacity="0.88"/>
+    </svg>
+  </div>
+
+  <div class="header-text">
+    <h1>台股低基期選股機器人</h1>
+    <p>v4 · FinMind 純瀏覽器版 · 149 檔熱門科技股 · 不需伺服器</p>
+  </div>
+
+  <div class="header-right">
+    <div class="api-pill">API <em id="apiN">0</em> / 600</div>
+  </div>
+</div>
+</div>
+</header>
+
+<main>
+<div class="wrap">
+
+<!-- 篩選條件 -->
+<div class="card">
+  <div class="card-title">篩選條件設定</div>
+  <div class="gates-grid">
+    <div class="gate-card g1">
+      <div class="gate-label"><span class="gdot"></span>財務防護門</div>
+      <div class="frow">
+        <span class="flabel">負債比上限 (%)</span>
+        <input type="number" class="finput" id="cfgDebt" value="50" min="10" max="90">
+      </div>
+      <div class="frow">
+        <span class="flabel">要求 EPS &gt; 0</span>
+        <label class="tog"><input type="checkbox" id="cfgEPS" checked><span class="tslider"></span></label>
+      </div>
+      <div class="frow">
+        <span class="flabel">要求近 2 年配息</span>
+        <label class="tog"><input type="checkbox" id="cfgDiv" checked><span class="tslider"></span></label>
+      </div>
+    </div>
+
+    <div class="gate-card g2">
+      <div class="gate-label"><span class="gdot"></span>低基期門</div>
+      <div class="frow">
+        <span class="flabel">60 日跌幅門檻 (%)</span>
+        <input type="number" class="finput" id="cfgDrop" value="30" min="5" max="80">
+      </div>
+      <div class="frow">
+        <span class="flabel">最少通過門數</span>
+        <select id="cfgMinGates" class="finput wide">
+          <option value="1">1 門</option>
+          <option value="2" selected>2 門</option>
+          <option value="3">3 門</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="gate-card g3">
+      <div class="gate-label"><span class="gdot"></span>轉機訊號門</div>
+      <div class="frow">
+        <span class="flabel">月營收連續 YoY+ (月)</span>
+        <input type="number" class="finput" id="cfgRevM" value="1" min="1" max="6">
+      </div>
+      <div class="frow">
+        <span class="flabel">RSI(14) 低於</span>
+        <input type="number" class="finput" id="cfgRSI" value="50" min="20" max="80">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 操作列 -->
+<div class="card" style="padding:14px 20px">
+  <div class="action-bar">
+    <button class="btn btn-go" id="btnStart" onclick="startScreen()">▶ 開始篩選</button>
+    <button class="btn btn-stop" id="btnStop" onclick="doStop()" style="display:none">■ 停止</button>
+    <button class="btn btn-ghost" onclick="clearAll()">清除</button>
+    <span class="hint-txt">共 <strong>149</strong> 檔 · 兩階段掃描</span>
+  </div>
+</div>
+
+<!-- 進度 -->
+<div class="card prog-section" id="progSec">
+  <div class="prog-hdr">
+    <div class="prog-lbl" id="progLbl">準備中...</div>
+    <div class="prog-pct mono" id="progPct">0%</div>
+  </div>
+  <div class="prog-bar"><div class="prog-fill" id="progFill"></div></div>
+  <div class="phases">
+    <span class="ptag" id="pt1">Phase 1：股價技術面</span>
+    <span class="ptag" id="pt2">Phase 2：財務深度查</span>
+  </div>
+  <div class="log-box" id="logBox"></div>
+</div>
+
+<!-- 結果 -->
+<div class="card" id="resCard" style="display:none">
+  <div class="res-hdr">
+    <div class="res-title">
+      篩選結果
+      <span class="res-count">符合：<strong id="resCount">0</strong> 檔</span>
+    </div>
+    <div class="ftabs">
+      <button class="ftab on" onclick="setF('all',this)">全部</button>
+      <button class="ftab" onclick="setF('2',this)">2+ 門</button>
+      <button class="ftab" onclick="setF('3',this)">3 門 ⭐</button>
+    </div>
+  </div>
+  <div class="tbl-wrap">
+    <table id="tbl">
+      <thead>
+        <tr>
+          <th onclick="srt('ticker')">代號<span class="tharr">↕</span></th>
+          <th>名稱</th>
+          <th onclick="srt('drop60')">60日跌幅<span class="tharr">↕</span></th>
+          <th>股價</th>
+          <th>三門</th>
+          <th onclick="srt('gates')">通過<span class="tharr">↕</span></th>
+          <th onclick="srt('eps')">EPS<span class="tharr">↕</span></th>
+          <th onclick="srt('debt')">負債比<span class="tharr">↕</span></th>
+        </tr>
+      </thead>
+      <tbody id="tbody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- 空白提示 -->
+<div class="card empty" id="emptyState">
+  <svg width="58" height="58" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2">
+    <circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/>
+  </svg>
+  <p>點擊「▶ 開始篩選」掃描 149 檔熱門科技股</p>
+  <p>Phase 1 約 30 秒 · Phase 2 依通過數增加約 10–60 秒</p>
+</div>
+
+</div>
+</main>
+
+<script>
+// ── Token ──────────────────────────────────────────────────────
+const TOKEN = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJ1c2VyX2lkIjoiamFuZSIsImVtYWlsIjoiYTI0NTc5MTAxMjM5QGdtYWlsLmNvbSIsInRva2VuX3ZlcnNpb24iOjF9.r_Y572EmzIaBkigXKPvOkUfcMZyShAXKK6SzMDW-LrA";
+
+// ── 149 檔股票清單 [代號, 中文名, 子產業] ──────────────────────
+const STOCKS=[
+  // 晶圓代工
+  ["2330","台積電","晶圓代工"],["2303","聯電","晶圓代工"],["6770","力積電","晶圓代工"],["5347","世界先進","晶圓代工"],
+  // IC設計
+  ["2454","聯發科","IC設計"],["3661","世芯-KY","ASIC"],["3443","創意","ASIC"],["5274","信驊","BMC"],
+  ["4966","譜瑞-KY","高速IC"],["6533","晶心科","IP矽智財"],["6643","M31","IP矽智財"],["3529","力旺","IP矽智財"],
+  ["3035","智原","ASIC/IP"],["2379","瑞昱","IC設計"],["3034","聯詠","驅動IC"],["5269","祥碩","高速IC"],
+  ["8299","群聯","記憶體IC"],["4919","新唐","MCU"],["3014","聯陽","IC設計"],["6526","達發","IC設計"],
+  ["2401","凌陽","IC設計"],["8016","矽創","驅動IC"],["6202","盛群","MCU"],["4961","天鈺","驅動IC"],
+  ["3592","瑞鼎","驅動IC"],["2458","義隆電","IC設計"],["3006","晶豪科","SRAM"],["6415","矽力-KY","電源IC"],
+  ["2363","矽統","IC設計"],["5344","立積","射頻IC"],
+  // 封測/先進封裝
+  ["3711","日月光投控","封測"],["6239","力成","封測"],["2441","超豐","封測"],["6147","頎邦","封測"],
+  ["3264","欣銓","測試"],["6451","訊芯-KY","封測"],["2329","華泰","封測"],["6271","同欣電","封測"],
+  ["8150","南茂","封測"],["2449","京元電子","封測"],
+  // 半導體設備
+  ["3680","家登","半導體設備"],["3413","京鼎","半導體設備"],["6196","帆宣","廠務設備"],
+  ["2404","漢唐","無塵室"],["6510","精測","測試介面"],["6515","穎崴","測試座"],
+  ["6223","旺矽","探針卡"],["3131","弘塑","清洗設備"],["6640","均華","揀晶設備"],
+  ["6438","迅得","半導體設備"],["3289","宜特","可靠度測試"],
+  // 矽晶圓/材料
+  ["6488","環球晶","矽晶圓"],["6182","合晶","矽晶圓"],["5483","中美晶","矽晶圓"],
+  // 記憶體/HBM
+  ["2344","華邦電","記憶體"],["2408","南亞科","記憶體"],["2451","創見","記憶體模組"],
+  ["3260","威剛","記憶體模組"],["5289","宜鼎","工控記憶體"],
+  // AI伺服器/ODM
+  ["2382","廣達","AI伺服器"],["3231","緯創","AI伺服器"],["2356","英業達","AI伺服器"],
+  ["6669","緯穎","AI伺服器"],["2317","鴻海","EMS/AI"],["2376","技嘉","AI主機板"],
+  ["2357","華碩","品牌/主機板"],["2353","宏碁","品牌"],["2324","仁寶","代工"],
+  ["4938","和碩","EMS"],["2301","光寶科","電源/光電"],["6166","凌華","工業電腦"],["2385","群光","電源模組"],
+  // 散熱/液冷
+  ["3017","奇鋐","散熱/液冷"],["3324","雙鴻","散熱/液冷"],["3653","健策","均熱片"],
+  ["6805","富世達","散熱"],["8996","高力","液冷板"],["6230","尼得科超眾","散熱"],
+  ["2059","川湖","伺服器滑軌"],["3060","銘異","散熱"],
+  // 電源/儲能
+  ["2308","台達電","電源/HVDC"],["6121","新普","電池模組"],["6781","AES-KY","儲能"],
+  // PCB/ABF載板
+  ["3037","欣興","ABF載板"],["8046","南電","ABF載板"],["3189","景碩","ABF載板"],
+  ["2383","台光電","銅箔基板"],["6213","聯茂","銅箔基板"],["2313","華通","PCB"],
+  ["2316","楠梓電","PCB"],["3044","健鼎","PCB"],["6552","易華電","軟板"],
+  ["2368","金像電","PCB"],["5469","瀚宇博","PCB"],["6278","台表科","PCB"],
+  ["4927","泰鼎-KY","PCB"],["6274","台燿","銅箔基板"],
+  // 被動元件/連接器
+  ["2327","國巨","被動元件"],["2492","華新科","被動元件"],["2456","奇力新","被動元件"],
+  ["3023","信邦","連接器"],["2392","正崴","連接器"],["3557","嘉澤","連接器"],
+  ["5457","宣德","連接器"],["2421","建準","風扇馬達"],["2439","美律","電聲元件"],
+  // CPO/光通訊
+  ["4979","華星光","光通訊"],["3081","聯亞","光通訊"],["3450","聯鈞","光通訊"],
+  ["4977","眾達-KY","光通訊"],["3163","波若威","光通訊"],["4908","前鼎","光通訊"],
+  // 網通
+  ["2345","智邦","交換器"],["5388","中磊","網通"],["3704","合勤控","網通"],
+  ["6285","啟碁","網通"],["4906","正文","網通"],["3596","智易","網通"],
+  // 重電/機器人/自動化
+  ["2049","上銀","機器人"],["1519","華城","重電"],["1513","中興電","重電"],
+  ["1503","士電","重電"],["1504","東元","馬達"],["1514","亞力","重電"],["1590","亞德客-KY","氣動元件"],
+  // 光學
+  ["3008","大立光","光學鏡頭"],["3406","玉晶光","光學鏡頭"],["6209","今國光","光學鏡頭"],
+  ["3530","晶相光","CIS"],["6176","瑞儀","光學膜"],
+  // 砷化鎵/射頻
+  ["3105","穩懋","砷化鎵"],["2455","全新","砷化鎵"],["8086","宏捷科","砷化鎵"],
+  // 電子通路
+  ["2347","聯強","電子通路"],["3702","大聯大","電子通路"],
+  // 精密零件/車電
+  ["3376","新日興","精密轉軸"],["5243","乙盛-KY","精密機構"],["3527","同致","車用電子"],
+  ["6116","彩晶","面板"],["6187","萬潤","AOI設備"],["2467","志聖","熱製程設備"],
+];
+
+// ── State ───────────────────────────────────────────────────────
+let apiN=0, stop=false, results=[], curFilter='all', sortF='gates', sortD=-1;
+
+// ── Util ────────────────────────────────────────────────────────
+const dateAgo=d=>{const x=new Date();x.setDate(x.getDate()-d);return x.toISOString().slice(0,10)};
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+
+function log(msg,cls=''){
+  const b=document.getElementById('logBox');
+  const d=document.createElement('div');
+  d.className='ll'+(cls?' '+cls:'');
+  d.textContent=`[${new Date().toLocaleTimeString('zh-TW')}] ${msg}`;
+  b.appendChild(d);b.scrollTop=b.scrollHeight;
+}
+
+function setProg(pct,lbl){
+  document.getElementById('progFill').style.width=pct+'%';
+  document.getElementById('progPct').textContent=Math.round(pct)+'%';
+  if(lbl)document.getElementById('progLbl').textContent=lbl;
+}
+
+function tickAPI(n=1){
+  apiN+=n;document.getElementById('apiN').textContent=apiN;
+}
+
+// ── FinMind fetch ───────────────────────────────────────────────
+async function fm(dataset,id,start){
+  const u=`https://api.finmindtrade.com/api/v4/data?dataset=${dataset}&data_id=${id}&start_date=${start}&token=${TOKEN}`;
+  tickAPI();
+  try{const r=await fetch(u);const j=await r.json();return j.status===200?j.data||[]:[]}
+  catch{return[]}
+}
+
+// ── RSI(14) ─────────────────────────────────────────────────────
+function rsi14(closes){
+  if(closes.length<16)return 50;
+  const sl=closes.slice(-15);
+  let g=0,l=0;
+  for(let i=1;i<sl.length;i++){const d=sl[i]-sl[i-1];d>0?g+=d:l-=d}
+  const ag=g/14,al=l/14;
+  return al===0?100:Math.round(100-100/(1+ag/al));
+}
+
+// ── Price metrics ───────────────────────────────────────────────
+function calcM(data){
+  if(!data||data.length<10)return null;
+  const rows=[...data].sort((a,b)=>a.date>b.date?1:-1);
+  const n=rows.length;
+  const cur=rows[n-1];
+  const price=parseFloat(cur.close);
+
+  const l60=rows.slice(Math.max(0,n-60));
+  const hi60=Math.max(...l60.map(r=>parseFloat(r.max||r.close)));
+  const drop60=Math.max(0,(hi60-price)/hi60*100);
+
+  const c60=l60.map(r=>parseFloat(r.close));
+  const ma60=c60.reduce((a,b)=>a+b,0)/c60.length;
+
+  const prev=rows.length>1?parseFloat(rows[n-2].close):price;
+  const ma60Cross=price>=ma60&&prev<ma60;
+
+  const allC=rows.map(r=>parseFloat(r.close));
+  const rsi=rsi14(allC);
+
+  const l20=rows.slice(Math.max(0,n-20));
+  const avgV=l20.map(r=>parseFloat(r.Trading_Volume||0)).reduce((a,b)=>a+b,0)/l20.length;
+  const todV=parseFloat(cur.Trading_Volume||0);
+  const volR=avgV>0?todV/avgV:1;
+
+  return{price,drop60,ma60,ma60Cross,rsi,volR};
+}
+
+// ── Revenue YoY ─────────────────────────────────────────────────
+function revYoY(data,months){
+  if(!data||data.length<months+12)return{pass:false,yoy:null};
+  const s=[...data].sort((a,b)=>{
+    const da=a.revenue_year*100+a.revenue_month;
+    const db=b.revenue_year*100+b.revenue_month;
+    return db-da;
+  });
+  let pos=0;
+  for(let i=0;i<months&&i<s.length;i++){
+    const c=s[i];
+    const p=s.find(r=>r.revenue_year===c.revenue_year-1&&r.revenue_month===c.revenue_month);
+    if(p&&p.revenue>0&&(c.revenue-p.revenue)/p.revenue>0)pos++;
+  }
+  const lt=s[0];
+  const lp=s.find(r=>r.revenue_year===lt?.revenue_year-1&&r.revenue_month===lt?.revenue_month);
+  const latestYoY=(lt&&lp&&lp.revenue>0)?(lt.revenue-lp.revenue)/lp.revenue*100:null;
+  return{pass:pos>=months,yoy:latestYoY};
+}
+
+// ── Main ─────────────────────────────────────────────────────────
+async function startScreen(){
+  stop=false;apiN=0;results=[];
+  document.getElementById('apiN').textContent='0';
+
+  const cfg={
+    debt:parseFloat(document.getElementById('cfgDebt').value)||50,
+    eps:document.getElementById('cfgEPS').checked,
+    div:document.getElementById('cfgDiv').checked,
+    drop:parseFloat(document.getElementById('cfgDrop').value)||30,
+    minG:parseInt(document.getElementById('cfgMinGates').value)||2,
+    rsi:parseFloat(document.getElementById('cfgRSI').value)||50,
+    revM:parseInt(document.getElementById('cfgRevM').value)||1,
+  };
+
+  document.getElementById('btnStart').disabled=true;
+  document.getElementById('btnStop').style.display='inline-flex';
+  document.getElementById('progSec').classList.add('on');
+  document.getElementById('emptyState').style.display='none';
+  document.getElementById('resCard').style.display='none';
+  document.getElementById('logBox').innerHTML='';
+  document.getElementById('pt1').className='ptag active';
+  document.getElementById('pt2').className='ptag';
+
+  const priceStart=dateAgo(130);
+  const finStart=dateAgo(1095);
+  const revStart=dateAgo(450);
+
+  log(`開始掃描 ${STOCKS.length} 檔 | 跌幅門檻 ${cfg.drop}% | 負債上限 ${cfg.debt}%`,'i');
+
+  // ── Phase 1：股價 ──────────────────────────────────────────
+  const p1=[];
+  for(let i=0;i<STOCKS.length;i++){
+    if(stop){log('已停止','w');break}
+    const [ticker,name,sub]=STOCKS[i];
+    setProg(i/STOCKS.length*50,`Phase 1 · ${i+1}/${STOCKS.length} · ${ticker} ${name}`);
+
+    const data=await fm('TaiwanStockPrice',ticker,priceStart);
+    await sleep(80);
+
+    const m=calcM(data);
+    if(!m){log(`${ticker} ${name} 無資料`,'w');continue}
+
+    if(m.drop60>=cfg.drop*0.75){
+      p1.push({ticker,name,sub,...m});
+      const ico=m.drop60>=cfg.drop?'🟠':'🔸';
+      log(`${ico} ${ticker} ${name}  跌 ${m.drop60.toFixed(1)}%  RSI ${m.rsi}`);
+    }
+  }
+
+  log(`Phase 1 完成，${p1.length} 檔進入財務深查`,'ok');
+  document.getElementById('pt1').className='ptag done';
+  document.getElementById('pt2').className='ptag active';
+
+  // ── Phase 2：財務深查 ──────────────────────────────────────
+  for(let i=0;i<p1.length;i++){
+    if(stop){log('已停止','w');break}
+    const r=p1[i];
+    setProg(50+i/p1.length*50,`Phase 2 · ${i+1}/${p1.length} · ${r.ticker} ${r.name}`);
+
+    const [fin,bal,div,rev]=await Promise.all([
+      fm('TaiwanStockFinancialStatements',r.ticker,finStart),
+      fm('TaiwanStockBalanceSheet',r.ticker,finStart),
+      fm('TaiwanStockDividend',r.ticker,finStart),
+      fm('TaiwanStockMonthRevenue',r.ticker,revStart),
+    ]);
+    // fmFetch already counted 1 each (×4 above), so no extra tickAPI needed
+    await sleep(220);
+
+    // Gate 1 — 財務
+    const epsRows=fin.filter(d=>d.type==='EPS').sort((a,b)=>b.date>a.date?1:-1);
+    const eps=epsRows.length?parseFloat(epsRows[0].value):null;
+    const epsOK=!cfg.eps||(eps!=null&&eps>0);
+
+    const getVal=(rows,types)=>{
+      for(const t of types){
+        const f=rows.filter(d=>d.type===t).sort((a,b)=>b.date>a.date?1:-1);
+        if(f.length)return parseFloat(f[0].value);
+      }return null;
+    };
+    const ta=getVal(bal,['TotalAssets','Total_Assets']);
+    const eq=getVal(bal,['Equity','TotalEquity','StockholdersEquity']);
+    let debt=null;
+    if(ta&&eq&&ta>0)debt=(ta-eq)/ta*100;
+    const debtOK=debt===null||debt<cfg.debt;
+
+    const now=new Date().getFullYear();
+    const hasDivid=div.some(d=>{
+      const yr=parseInt(d.year||d.date?.slice(0,4)||0);
+      if(yr<now-2)return false;
+      return(parseFloat(d.CashEarningsDistribution||0)+parseFloat(d.CashStatutoryReserve||0)
+        +parseFloat(d.StockEarningsDistribution||0)+parseFloat(d.StockStatutoryReserve||0))>0;
+    });
+    const divOK=!cfg.div||hasDivid;
+
+    const gate1=epsOK&&debtOK&&divOK;
+
+    // Gate 2 — 低基期
+    const gate2=r.drop60>=cfg.drop;
+
+    // Gate 3 — 轉機
+    const rv=revYoY(rev,cfg.revM);
+    const revOK=rv.pass;
+    const techOK=r.rsi<cfg.rsi||r.ma60Cross||r.volR>=1.5;
+    const gate3=revOK&&techOK;
+
+    const gates=[gate1,gate2,gate3].filter(Boolean).length;
+
+    results.push({
+      ticker:r.ticker,name:r.name,sub:r.sub,
+      price:r.price,drop60:r.drop60,rsi:r.rsi,ma60Cross:r.ma60Cross,volR:r.volR,
+      eps,debt,hasDivid,revYoY:rv.yoy,
+      gate1,gate2,gate3,gates,
+    });
+
+    const s='★'.repeat(gates)+'☆'.repeat(3-gates);
+    log(`${s} ${r.ticker} ${r.name}  財${gate1?'✓':'✗'} 跌${gate2?'✓':'✗'} 機${gate3?'✓':'✗'}`,gates>=2?'ok':'');
+  }
+
+  setProg(100,'篩選完成');
+  document.getElementById('pt2').className='ptag done';
+
+  const qual=results.filter(r=>r.gates>=cfg.minG).length;
+  log(`完成！分析 ${results.length} 檔，${qual} 檔通過 ${cfg.minG}+ 門`,'ok');
+
+  renderRes();
+  document.getElementById('btnStart').disabled=false;
+  document.getElementById('btnStop').style.display='none';
+  document.getElementById('resCard').style.display='block';
+}
+
+function doStop(){stop=true;document.getElementById('btnStart').disabled=false;document.getElementById('btnStop').style.display='none'}
+
+function clearAll(){
+  results=[];apiN=0;
+  document.getElementById('apiN').textContent='0';
+  document.getElementById('resCard').style.display='none';
+  document.getElementById('progSec').classList.remove('on');
+  document.getElementById('emptyState').style.display='block';
+  document.getElementById('progFill').style.width='0%';
+  document.getElementById('logBox').innerHTML='';
+}
+
+// ── Render ───────────────────────────────────────────────────────
+function setF(f,el){
+  curFilter=f;
+  document.querySelectorAll('.ftab').forEach(t=>t.classList.remove('on'));
+  el.classList.add('on');
+  renderRes();
+}
+
+function srt(f){
+  if(sortF===f)sortD*=-1;else{sortF=f;sortD=-1}
+  renderRes();
+}
+
+function renderRes(){
+  const minG=parseInt(document.getElementById('cfgMinGates').value)||2;
+  let data=[...results];
+
+  if(curFilter==='2')data=data.filter(r=>r.gates>=2);
+  else if(curFilter==='3')data=data.filter(r=>r.gates>=3);
+
+  const fieldMap={ticker:'ticker',drop60:'drop60',gates:'gates',eps:'eps',debt:'debt'};
+  data.sort((a,b)=>{
+    const f=fieldMap[sortF]||sortF;
+    if(f==='ticker')return sortD*(a[f]>b[f]?1:-1);
+    return sortD*((b[f]??-9999)-(a[f]??-9999));
+  });
+
+  document.getElementById('resCount').textContent=results.filter(r=>r.gates>=minG).length;
+
+  const tbody=document.getElementById('tbody');
+  tbody.innerHTML='';
+
+  if(!data.length){
+    tbody.innerHTML=`<tr><td colspan="8" style="text-align:center;padding:40px;color:var(--muted)">無符合條件的股票</td></tr>`;
+    return;
+  }
+
+  data.forEach(r=>{
+    const tr=document.createElement('tr');
+    tr.className='drow'+(r.gates>=3?' hl':'');
+    tr.innerHTML=`
+      <td><span class="tcell">${r.ticker}</span></td>
+      <td>
+        <div class="ncell">${r.name}</div>
+        <span class="stag">${r.sub}</span>
+      </td>
+      <td><span class="dropcell">▼ ${r.drop60.toFixed(1)}%</span></td>
+      <td><span class="pcell mono">$${r.price.toFixed(1)}</span></td>
+      <td>
+        <div class="gdots">
+          <span class="gd d1 ${r.gate1?'on':'off'}"></span>
+          <span class="gd d2 ${r.gate2?'on':'off'}"></span>
+          <span class="gd d3 ${r.gate3?'on':'off'}"></span>
+        </div>
+      </td>
+      <td><span class="stars">${'★'.repeat(r.gates)}${'☆'.repeat(3-r.gates)}</span></td>
+      <td class="mono">${r.eps!=null?r.eps.toFixed(2):'–'}</td>
+      <td class="mono ${r.debt!=null&&r.debt>cfg_debt()?'warn':''}">${r.debt!=null?r.debt.toFixed(1)+'%':'–'}</td>
+    `;
+
+    const det=document.createElement('tr');
+    det.className='detrow';det.style.display='none';
+    det.innerHTML=`<td colspan="8">
+      <div class="det-panel">
+        <div class="di"><div class="dk">RSI (14)</div><div class="dv ${r.rsi<30?'ok':r.rsi>70?'bad':''}">${r.rsi}</div></div>
+        <div class="di"><div class="dk">量比 (今/20均)</div><div class="dv ${r.volR>=1.5?'ok':''}">${r.volR.toFixed(2)}x</div></div>
+        <div class="di"><div class="dk">MA60 突破</div><div class="dv ${r.ma60Cross?'ok':'warn'}">${r.ma60Cross?'✓ 是':'✗ 否'}</div></div>
+        <div class="di"><div class="dk">月營收 YoY</div><div class="dv ${r.revYoY!=null&&r.revYoY>0?'ok':r.revYoY!=null?'bad':''}">${r.revYoY!=null?r.revYoY.toFixed(1)+'%':'–'}</div></div>
+        <div class="di"><div class="dk">配息紀錄</div><div class="dv ${r.hasDivid?'ok':'warn'}">${r.hasDivid?'✓ 近2年有':'✗ 無'}</div></div>
+        <div class="di"><div class="dk">最新 EPS</div><div class="dv ${r.eps!=null&&r.eps>0?'ok':r.eps!=null?'bad':''}">${r.eps!=null?r.eps.toFixed(2):'–'}</div></div>
+        <div class="di"><div class="dk">負債比</div><div class="dv ${r.debt!=null&&r.debt>50?'warn':r.debt!=null?'ok':''}">${r.debt!=null?r.debt.toFixed(1)+'%':'–'}</div></div>
+        <div class="di"><div class="dk">三門通過</div><div class="dv ${r.gates>=2?'ok':'warn'}">${r.gates} / 3 門</div></div>
+      </div>
+    </td>`;
+
+    tr.addEventListener('click',()=>{
+      det.style.display=det.style.display==='none'?'table-row':'none';
+    });
+
+    tbody.appendChild(tr);
+    tbody.appendChild(det);
+  });
+}
+
+function cfg_debt(){return parseFloat(document.getElementById('cfgDebt').value)||50}
+</script>
+</body>
+</html>
