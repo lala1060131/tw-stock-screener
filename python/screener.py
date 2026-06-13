@@ -63,8 +63,8 @@ DEFAULT_CONFIG = {
     "schedule_enabled": False,
     "schedule_time": "18:00",
     "schedule_days": ["Mon","Tue","Wed","Thu","Fri"],
-    "max_workers": 6,
-    "stock_pool_size": 500,
+    "max_workers": 3,
+    "stock_pool_size": 120,
     "filters": {
         "debt_ratio_max": 50,
         "require_dividend": True,
@@ -1119,7 +1119,7 @@ if __name__ == "__main__":
     elif mode == "excel":
         export_excel()
     elif mode == "list":
-        stocks = get_tw_stock_list(500)
+        stocks = get_tw_stock_list(120)
         print(f"取得 {len(stocks)} 支股票：{stocks[:10]}...")
     else:
         run_screening()
