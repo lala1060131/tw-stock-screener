@@ -2,7 +2,7 @@ services:
   - type: web
     name: tw-stock-screener
     runtime: node
-    buildCommand: pip3 install -r requirements.txt
+    buildCommand: pip3 install --no-cache-dir -r requirements.txt
     startCommand: node server.cjs
     plan: free
     envVars:
